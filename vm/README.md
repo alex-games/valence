@@ -168,6 +168,17 @@ python3 tools/compress-filesystem.py vm/runtime/filesystem --html vm/runtime/ind
 
 ## Redis ccache sidecar
 
+Build with the gate:
+
+```bash
+./vm/build2026-minecraft.sh --require-ccache
+```
+
+It passes `CCACHE_CONFIGPATH=/config/ccache.conf` into the container and captures
+Redis keys/commands/hits/misses before and after. `--require-ccache` fails the
+build (exit 4) when the sidecar saw no compiler traffic, so a build that compiled
+everything cold cannot report success.
+
 The build joins `buildroot-net` and ccache 4.13 uses
 `remote_storage = redis://buildroot-redis:6379/0`, `namespace = buildroot`.
 
