@@ -1,0 +1,15 @@
+#!/bin/sh
+#
+# Keep exactly one nginx and one Mosquitto init script: ours. Buildroot's
+# packages install S50nginx / S50mosquitto, and starting both would bind the
+# same ports twice or start the proxy before the game origin. This runs at S46,
+# before either package script would.
+#
+for f in /etc/init.d/S*nginx* /etc/init.d/S*mosquitto*; do
+    [ -f "$f" ] || continue
+    case "$f" in
+        */S53nginx|*/S48mosquitto|*/S46cleanup) ;;
+        *) rm -f "$f" ;;
+    esac
+done
+exit 0

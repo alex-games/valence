@@ -1,0 +1,33 @@
+#!/bin/sh
+#
+# Mosquitto 2.x is the MQTT v5 broker for the level. The bridge in
+# minecraft-server talks to the loopback listener; browsers reach the websocket
+# listener through nginx at /mqtt.
+#
+DAEMON=/usr/sbin/mosquitto
+CONF=/etc/mosquitto/mosquitto.conf
+PID=/var/run/mosquitto.pid
+
+case "$1" in
+  start)
+    printf "Starting mosquitto: "
+    mkdir -p /var/log /var/run
+    # `-d` daemonizes; the pid_file in mosquitto.conf is authoritative.
+    $DAEMON -c "$CONF" -d || echo "FAIL"
+    echo "OK"
+    ;;
+  stop)
+    printf "Stopping mosquitto: "
+    if [ -f "$PID" ]; then kill "$(cat "$PID")" 2>/dev/null || true; fi
+    echo "OK"
+    ;;
+  restart|reload)
+    "$0" stop
+    sleep 1
+    "$0" start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}"
+    exit 1
+    ;;
+esac

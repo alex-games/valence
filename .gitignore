@@ -16,3 +16,13 @@ flamegraph*.svg
 perf.data
 perf.data.old
 /graph.svg
+
+# Nautilus Craft additions
+.venv/
+.playwright/
+assets/vendor/
+server/target/
+
+# VM runtime payload and the shared 258 MiB Vault binary
+vm/runtime/
+vm/board/minecraft/rootfs_overlay/usr/bin/vault

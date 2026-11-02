@@ -1,0 +1,170 @@
+# Third-party assets — Nautilus Craft, Torrance level
+
+All assets below are permissive. They were fetched on **2026-11-01**. The
+vendored originals live under `assets/vendor/`; the files the game actually
+uses live under `web/assets/` and are inlined into `web/dist/index.html` and
+stored in PostgreSQL (`nautilus_craft.game_assets`).
+
+## Block textures — CC0 1.0
+
+**“16×16 Block Texture Set”** and **“16*16 Block Textures”** by
+**ARoachIFoundOnMyPillow**.
+
+- Source: https://opengameart.org/content/16x16-block-texture-set
+- Source: https://opengameart.org/content/1616-block-textures
+- Licence: Creative Commons Zero 1.0 Universal (public domain dedication)
+- Used for: grass, dirt, stone, sand, gravel, farmland, oak planks/log/leaves,
+  glass, granite/limestone/marble/slate/rhyolite bricks, sandstone tiles, ice,
+  pine leaves, lupine, dandelion, tall grass.
+- Changes: 16×16 tiles placed in the game atlas; some tiles are tinted or
+  overlaid (asphalt darkening, water blue) and a few are composed with
+  procedural tiles (road lines, signs, cars, roofs).
+
+## Character and item sprites — CC0 1.0
+
+**“Voxel Pack”** by **Kenney** (kenney.nl).
+
+- Source: https://opengameart.org/content/voxel-pack
+- Source: https://kenney.nl/assets/voxel-pack
+- Licence: Creative Commons Zero 1.0 Universal
+- Used for: the gardener, barista, ranger, dealer and gnome NPCs (assembled
+  from the pack's head/body/arm/leg parts), the hedgehog, and the emerald
+  garden-token sprite.
+- Changes: parts assembled into single 128×180 RGBA sprites; emerald cropped
+  from the item sheet.
+
+## UI sounds — CC0 1.0
+
+**“UI Audio”** by **Kenney**, WAV conversion by **Calinou**.
+
+- Source: https://kenney.nl/assets/ui-audio
+- WAVs: https://github.com/Calinou/kenney-ui-audio (CC0)
+- Licence: Creative Commons Zero 1.0 Universal
+- Used for: `click.wav` (click4) and `switch.wav` (switch13).
+
+## Ambience — CC0 1.0
+
+**“Bird chirping sounds”** by **syncopika**.
+
+- Source: https://opengameart.org/content/bird-chirping-sounds
+- Licence: Creative Commons Zero 1.0 Universal
+- Used for: `birds.mp3`, a quiet looping ambience in the HTTP build. The
+  embedded (`/embed/`) build skips it so the serial fetch stays small.
+
+## Font — SIL Open Font License 1.1
+
+**“Press Start 2P”** by **CodeMan38**.
+
+- Source: https://fonts.google.com/specimen/Press+Start+2P
+- Licence: SIL Open Font License, Version 1.1 (see `web/assets/fonts/OFL.txt`)
+- Used for: headings and the landmark labels. Body copy stays in the system
+  monospace stack.
+
+## Engine
+
+The voxel engine, level geometry, UI and server are original code in this
+repository. Valence (the parent repository) is MIT licensed; this level does
+not use the Valence Java-protocol server — it is a browser voxel sandbox.
+
+## A note on trade marks
+
+The level is inspired by the Torrance, California neighbourhood the assistant
+measured at 33.8096 N, 118.3547 W. It uses no Mojang or Microsoft art, code,
+sounds or fonts, and is not affiliated with Minecraft.
+
+
+--- SIL OPEN FONT LICENSE ---
+
+Copyright 2012 The Press Start 2P Project Authors (cody@zone38.net), with Reserved Font Name "Press Start 2P".
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is copied below, and is also available with a FAQ at:
+http://scripts.sil.org/OFL
+
+
+-----------------------------------------------------------
+SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+-----------------------------------------------------------
+
+PREAMBLE
+The goals of the Open Font License (OFL) are to stimulate worldwide
+development of collaborative font projects, to support the font creation
+efforts of academic and linguistic communities, and to provide a free and
+open framework in which fonts may be shared and improved in partnership
+with others.
+
+The OFL allows the licensed fonts to be used, studied, modified and
+redistributed freely as long as they are not sold by themselves. The
+fonts, including any derivative works, can be bundled, embedded, 
+redistributed and/or sold with any software provided that any reserved
+names are not used by derivative works. The fonts and derivatives,
+however, cannot be released under any other type of license. The
+requirement for fonts to remain under this license does not apply
+to any document created using the fonts or their derivatives.
+
+DEFINITIONS
+"Font Software" refers to the set of files released by the Copyright
+Holder(s) under this license and clearly marked as such. This may
+include source files, build scripts and documentation.
+
+"Reserved Font Name" refers to any names specified as such after the
+copyright statement(s).
+
+"Original Version" refers to the collection of Font Software components as
+distributed by the Copyright Holder(s).
+
+"Modified Version" refers to any derivative made by adding to, deleting,
+or substituting -- in part or in whole -- any of the components of the
+Original Version, by changing formats or by porting the Font Software to a
+new environment.
+
+"Author" refers to any designer, engineer, programmer, technical
+writer or other person who contributed to the Font Software.
+
+PERMISSION & CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Font Software, to use, study, copy, merge, embed, modify,
+redistribute, and sell modified and unmodified copies of the Font
+Software, subject to the following conditions:
+
+1) Neither the Font Software nor any of its individual components,
+in Original or Modified Versions, may be sold by itself.
+
+2) Original or Modified Versions of the Font Software may be bundled,
+redistributed and/or sold with any software, provided that each copy
+contains the above copyright notice and this license. These can be
+included either as stand-alone text files, human-readable headers or
+in the appropriate machine-readable metadata fields within text or
+binary files as long as those fields can be easily viewed by the user.
+
+3) No Modified Version of the Font Software may use the Reserved Font
+Name(s) unless explicit written permission is granted by the corresponding
+Copyright Holder. This restriction only applies to the primary font name as
+presented to the users.
+
+4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+Software shall not be used to promote, endorse or advertise any
+Modified Version, except to acknowledge the contribution(s) of the
+Copyright Holder(s) and the Author(s) or with their explicit written
+permission.
+
+5) The Font Software, modified or unmodified, in part or in whole,
+must be distributed entirely under this license, and must not be
+distributed under any other license. The requirement for fonts to
+remain under this license does not apply to any document created
+using the Font Software.
+
+TERMINATION
+This license becomes null and void if any of the above conditions are
+not met.
+
+DISCLAIMER
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+OTHER DEALINGS IN THE FONT SOFTWARE.

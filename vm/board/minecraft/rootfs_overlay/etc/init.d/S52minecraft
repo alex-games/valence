@@ -1,0 +1,30 @@
+#!/bin/sh
+#
+# The single static game origin. nginx owns :80/:8080 and the MQTT websocket;
+# this process owns the Postgres-backed assets and the MQTT bridge.
+#
+PID=/var/run/minecraft.pid
+LOG=/var/log/minecraft.log
+
+case "$1" in
+  start)
+    printf "Starting minecraft-server: "
+    start-stop-daemon -S -q -b -m -p "$PID" -x /bin/sh -- \
+        -c "exec /usr/bin/minecraft-server --addr 127.0.0.1:8081 >>$LOG 2>&1" || echo "FAIL"
+    echo "OK"
+    ;;
+  stop)
+    printf "Stopping minecraft-server: "
+    start-stop-daemon -K -q -p "$PID" 2>/dev/null || true
+    echo "OK"
+    ;;
+  restart)
+    "$0" stop
+    sleep 1
+    "$0" start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}"
+    exit 1
+    ;;
+esac

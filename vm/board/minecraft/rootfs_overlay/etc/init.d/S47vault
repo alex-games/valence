@@ -1,0 +1,35 @@
+#!/bin/sh
+#
+# Vault holds each player's Bitcoin wallet. Dev mode is deliberate for this
+# disposable game guest: a fixed root token on loopback, KV v2 at secret/, and
+# no TLS. Replace with a file backend + operator init/unseal before exposing
+# anything beyond the VM.
+#
+DAEMON=/usr/bin/vault
+PID=/var/run/vault.pid
+LOG=/var/log/vault.log
+
+case "$1" in
+  start)
+    printf "Starting vault: "
+    mkdir -p /var/log /var/lib/vault
+    start-stop-daemon -S -q -b -m -p "$PID" -x "$DAEMON" -- \
+        server -dev -dev-root-token-id=nautilus-dev -dev-listen-address=127.0.0.1:8200 >>"$LOG" 2>&1
+    sleep 1
+    echo "OK (dev root token nautilus-dev)"
+    ;;
+  stop)
+    printf "Stopping vault: "
+    start-stop-daemon -K -q -p "$PID" 2>/dev/null || true
+    echo "OK"
+    ;;
+  restart)
+    "$0" stop
+    sleep 1
+    "$0" start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart}"
+    exit 1
+    ;;
+esac

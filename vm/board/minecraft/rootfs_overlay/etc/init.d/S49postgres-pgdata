@@ -1,0 +1,103 @@
+#! /bin/sh
+### BEGIN INIT INFO
+# Provides:          postgres-pgdata
+# Required-Start:    $local_fs
+# Required-Stop:     $local_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Re-own PGDATA when its uid does not match postgres
+# Description:       Buildroot creates PGDATA at package-install time and chowns
+#                    it to postgres. Adding a package that allocates a uid
+#                    *before* postgres shifts postgres's uid, and nothing in the
+#                    build re-chowns the directory, so initdb cannot fix its
+#                    permissions and no database is ever created. This runs at
+#                    S49 because the call that fails -- initdb inside
+#                    S50postgresql -- has to come after it.
+### END INIT INFO
+
+# Why this is a separate script rather than a step in S55postgres-vault:
+# S55 sorts *after* Buildroot's S50postgresql, which is the script that runs
+# `pg_ctl initdb`. By the time S55 runs, initdb has already failed. Anything
+# that has to influence initdb must sort before S50.
+
+LOG=/var/log/postgres-pgdata.log
+PGDATA=/var/lib/pgsql
+
+mkdir -p /var/log
+log() { echo "$(date '+%H:%M:%S') $*" | tee -a "$LOG"; }
+
+fix() {
+    if [ ! -d "$PGDATA" ]; then
+        mkdir -p "$PGDATA"
+        log "created $PGDATA"
+    fi
+
+    # Read the ids from passwd rather than hardcoding them. A hardcoded uid is
+    # exactly what breaks here again the next time a package is added.
+    pg_uid=$(id -u postgres 2>/dev/null) || {
+        log "WARNING: no postgres user in /etc/passwd; leaving $PGDATA alone"
+        return 0
+    }
+    pg_gid=$(id -g postgres 2>/dev/null)
+
+    # -n prints numeric ids and avoids the ~/.cache issue a listing to a
+    # directory can create on a writable-to-all parent.
+    cur=$(ls -ldn "$PGDATA" 2>/dev/null | awk '{print $3":"$4}')
+    if [ "$cur" = "$pg_uid:$pg_gid" ]; then
+        log "PGDATA already owned by postgres ($cur)"
+        return 0
+    fi
+
+    # The 0777 mode is a red herring, and chasing it costs an afternoon: chmod
+    # is permitted for the owner or root only, and no permission bit grants it.
+    # initdb finds the directory already exists and runs `chmod(0700)` as
+    # postgres, who is not the owner, and reports:
+    #
+    #   initdb: error: could not change permissions of directory
+    #   "/var/lib/pgsql": Operation not permitted
+    #
+    # which reads like the filesystem refusing mode changes. It is not: the
+    # identical chmod as root on the same 9p-backed directory returns 0. The
+    # difference is the uid.
+    log "PGDATA owned by $cur but postgres is $pg_uid:$pg_gid -- re-owning"
+    if chown -R "$pg_uid:$pg_gid" "$PGDATA"; then
+        chmod 700 "$PGDATA"
+        log "PGDATA now $(ls -ldn "$PGDATA" | awk '{print $3":"$4}')"
+    else
+        log "WARNING: could not chown $PGDATA; initdb will fail"
+    fi
+}
+
+case "$1" in
+  start)
+    fix
+    # Never fail the boot: if this cannot run, S50postgresql's initdb will say
+    # precisely what is wrong, and that message is better than one invented
+    # here. This script exists to make that case rarer, not to be the alarm.
+    exit 0
+    ;;
+  stop)
+    exit 0
+    ;;
+  restart|force-reload)
+    fix
+    exit 0
+    ;;
+  status)
+    pg_uid=$(id -u postgres 2>/dev/null)
+    pg_gid=$(id -g postgres 2>/dev/null)
+    cur=$(ls -ldn "$PGDATA" 2>/dev/null | awk '{print $3":"$4}')
+    if [ "$cur" = "$pg_uid:$pg_gid" ]; then
+        echo "PGDATA owned by postgres ($cur)"
+        exit 0
+    fi
+    echo "PGDATA owned by ${cur:-unknown}, postgres is $pg_uid:$pg_gid"
+    exit 1
+    ;;
+  *)
+    echo "Usage: /etc/init.d/S49postgres-pgdata {start|stop|restart|force-reload|status}"
+    exit 1
+    ;;
+esac
+
+exit 0

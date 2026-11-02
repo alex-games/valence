@@ -1,0 +1,2 @@
+# Buildroot users table for the Minecraft VM. The postgres, mosquitto and
+# nginx packages create their own accounts; nothing extra is needed here.

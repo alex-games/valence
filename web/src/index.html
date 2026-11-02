@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#8ec5e8">
+<meta name="description" content="Nautilus Craft — a beginner voxel level modelled on Torrance, California, served by nginx from the Minecraft VM.">
+<title>Nautilus Craft — Torrance Beginner Level</title>
+<style>/*__CSS__*/</style>
+</head>
+<body>
+<div id="game">
+  <canvas id="gl" aria-label="Torrance voxel world"></canvas>
+  <div id="labels"></div>
+
+  <header id="topbar">
+    <div class="left">
+      <div class="brand"><b>NAUTILUS CRAFT</b><span id="brandSub">Torrance beginner level · 33.8096°N 118.3547°W</span></div>
+      <div class="stats">
+        <span>XYZ <b id="coords">—</b></span>
+        <span>FPS <b id="fps">—</b> · <b id="mode">walking</b></span>
+        <span>TOKENS <b id="tokens">0 / 8</b></span>
+        <span>ANCHOR <b id="anchor">—</b></span>
+        <span>WALLET <b id="wallet">—</b></span>
+        <span id="net">OFFLINE · SOLO</span>
+      </div>
+    </div>
+  </header>
+
+  <div id="topright">
+    <button class="iconbtn" id="btnHelp" title="How to play" aria-label="How to play">?</button>
+    <button class="iconbtn" id="btnChat" title="Chat" aria-label="Chat">💬</button>
+    <button class="iconbtn" id="btnMap" title="Map" aria-label="Map">▦</button>
+    <button class="iconbtn" id="btnSound" title="Sound" aria-label="Sound">♪</button>
+    <button class="iconbtn" id="btnReset" title="Back to spawn" aria-label="Back to spawn">⟲</button>
+  </div>
+
+  <aside id="quests" aria-label="Beginner quests">
+    <h2><span>BEGINNER QUESTS</span><em id="qcount">0 / 6</em></h2>
+    <div id="qlist"></div>
+  </aside>
+
+  <div id="crosshair"></div>
+  <div id="hotbar" aria-label="Block palette"></div>
+  <div id="toast" role="status"></div>
+  <div id="hint">Click to look around · WASD to move · 1–9 to pick a block</div>
+
+  <div id="minimap"><canvas id="mapcanvas" width="192" height="192"></canvas><span>TORRANCE · N ↑</span></div>
+
+  <div id="chat">
+    <div id="chatlog"></div>
+    <form id="chatform" class="hidden"><input id="chatinput" maxlength="120" autocomplete="off" placeholder="Say something to the server…"><button type="submit">Send</button></form>
+  </div>
+  <button id="talk" class="hidden"><b id="talkName">Mara</b><span>E · TALK</span></button>
+  <div id="dialogue" class="hidden">
+    <div class="dname" id="dialogueName">Mara</div>
+    <p id="dialogueText"></p>
+    <button id="dialogueNext">Next</button>
+  </div>
+
+  <div id="touch">
+    <div id="stick"><div id="knob"></div></div>
+    <div id="actions">
+      <button data-act="jump" aria-label="Jump">JUMP</button>
+      <button data-act="fly" aria-label="Fly">FLY</button>
+      <button data-act="break" class="big" aria-label="Break block">⛏</button>
+      <button data-act="place" class="big" aria-label="Place block">▣</button>
+    </div>
+  </div>
+
+  <div id="welcome" class="modal">
+    <div class="card">
+      <div class="eyebrow" id="wEyebrow">NAUTILUS · MINECRAFT VM · BEGINNER LEVEL</div>
+      <h1><span id="wTitle">Torrance</span><small id="wSub">COMMUNITY GARDEN · LAGO SECO PARK · THE COFFEE BEAN</small></h1>
+      <p id="wIntro">A quiet voxel sandbox built from the geofence the assistant measured at
+        <b>33.8096°N, 118.3547°W</b> — the Torrance Community Garden and the streets around it.
+        No mobs, no damage, no hunger. Walk, build, and finish six beginner quests.</p>
+      <div class="row">
+        <span class="pill"><b>WASD</b> move</span>
+        <span class="pill"><b>Mouse</b> look</span>
+        <span class="pill"><b>LMB</b> break</span>
+        <span class="pill"><b>RMB</b> place</span>
+        <span class="pill"><b>1–9</b> blocks</span>
+        <span class="pill"><b>F</b> fly</span>
+      </div>
+      <p class="dim">On a phone: left thumb moves, right thumb looks, the round buttons jump,
+        fly, break and place. The world saves in the browser.</p>
+      <div class="namebar">
+        <label for="playerName">YOUR NAME</label>
+        <input id="playerName" maxlength="18" autocomplete="off" spellcheck="false" placeholder="Traveler">
+        <span id="netNote">Solo in the embedded WebView · online over HTTP</span>
+      </div>
+      <div class="btnrow">
+        <button class="btn primary" id="btnPlay">Play</button>
+        <button class="btn" id="btnHelp2">How to play</button>
+      </div>
+      <p class="dim" style="margin-top:14px">Served by <b>nginx</b> from <b>/nautilus/minecraft</b>
+        in the Minecraft VM · origin <b>127.0.0.1:8081</b></p>
+    </div>
+  </div>
+
+  <div id="help" class="modal hidden">
+    <div class="card">
+      <div class="eyebrow">HOW TO PLAY</div>
+      <h1>The beginner level</h1>
+      <p>You spawn on the plaza at the centre of a 96 × 96 block Torrance. The Community Garden is
+        north-west, Lago Seco Park is north-east, The Coffee Bean is south-east and Martin Chevrolet
+        is south-west. Follow the pale paths and the floating place names.</p>
+      <div class="keys">
+        <div class="key"><kbd>W A S D</kbd><span>walk</span></div>
+        <div class="key"><kbd>Space</kbd><span>jump / swim</span></div>
+        <div class="key"><kbd>Shift</kbd><span>sprint (down in fly)</span></div>
+        <div class="key"><kbd>Mouse</kbd><span>look</span></div>
+        <div class="key"><kbd>LMB</kbd><span>break a block</span></div>
+        <div class="key"><kbd>RMB</kbd><span>place a block</span></div>
+        <div class="key"><kbd>1–9</kbd><span>pick a block</span></div>
+        <div class="key"><kbd>Wheel</kbd><span>cycle blocks</span></div>
+        <div class="key"><kbd>F</kbd><span>toggle fly</span></div>
+        <div class="key"><kbd>M</kbd><span>map</span></div>
+        <div class="key"><kbd>H</kbd><span>this help</span></div>
+        <div class="key"><kbd>Esc</kbd><span>release mouse</span></div>
+      </div>
+      <p class="dim"><b>Quest list.</b> Visit the four landmarks, place ten blocks and break five.
+        Everything is safe: water lets you swim, flying lets you build anywhere, and nothing can
+        hurt you.</p>
+      <p class="dim"><b>Tips.</b> The minimap marks the four landmarks. The pale paths all lead back
+        to the spawn plaza. The free-build lawn is south of the plaza, past the Chevrolet lot.</p>
+      <div class="online">
+        <h3>PLAYERS ONLINE</h3>
+        <div id="onlineList">Offline — open the level over HTTP for multiplayer.</div>
+      </div>
+      <details class="credits">
+        <summary>Assets, licences & credits</summary>
+        <p class="dim">Block textures, character sprites, UI sounds, birdsong and the pixel font are
+          CC0 or SIL OFL. The full notices are below and in <b>/CREDITS.txt</b>.</p>
+        <pre id="creditsBox">loading…</pre>
+      </details>
+      <div class="btnrow">
+        <button class="btn primary" id="btnCloseHelp">Back to the world</button>
+        <button class="btn" id="btnResetWorld">Reset the world</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="complete" class="modal hidden">
+    <div class="card">
+      <div class="eyebrow">BEGINNER LEVEL COMPLETE</div>
+      <h1>You know Torrance<small>ALL SIX QUESTS DONE</small></h1>
+      <p id="completeStats">—</p>
+      <p class="dim">Keep building, or reset the world to start the tour again.</p>
+      <div class="btnrow">
+        <button class="btn primary" id="btnKeep">Keep building</button>
+        <button class="btn" id="btnRestart">Start again</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>/*__JS__*/</script>
+</body>
+</html>

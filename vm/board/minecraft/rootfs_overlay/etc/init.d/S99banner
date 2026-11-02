@@ -1,0 +1,24 @@
+#!/bin/sh
+#
+# The console's landing card. Everything below the banner is a real running
+# service; the MQTT tree is shared with the bridge and nginx.
+#
+cat <<'EOF'
+
+  ================================================================
+   NAUTILUS CRAFT — TORRANCE
+   Community Garden · Lago Seco Park · The Coffee Bean
+
+   Game          http://127.0.0.1/          (nginx :80)
+   App embed     http://127.0.0.1:8080/embed/
+   Health        http://127.0.0.1/healthz
+   MQTT v5       mqtt://127.0.0.1:1883     ws://<vm>/mqtt
+   Database      postgresql://craft@127.0.0.1/nautilus_craft
+   Level C2      wa/v1/c2/torrance/...
+   Anchors       wa/v1/c2/torrance/ledger/anchor
+
+   Console: /usr/bin/minecraft-server --addr 127.0.0.1:8081
+   Logs:    /var/log/minecraft.log /var/log/nginx/ /var/log/pgsql.log
+  ================================================================
+
+EOF

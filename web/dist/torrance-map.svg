@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="880" viewBox="0 0 900 880" role="img" aria-labelledby="title desc">
+  <title id="title">Nautilus Craft — Torrance beginner level map</title>
+  <desc id="desc">A top-down plate of the 96 by 96 block level: Community Garden north-west, Lago Seco Park north-east, The Coffee Bean south-east, Martin Chevrolet south-west, spawn plaza at the centre.</desc>
+  <style>
+    .t { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; fill: #eaf3f5; }
+    .dim { fill: #9fb2b8; }
+    .gold { fill: #f4c95d; }
+    .green { fill: #8fd14f; }
+    .blue { fill: #7fc4ff; }
+    .plate { fill: rgba(9,15,18,0.92); stroke: rgba(255,255,255,0.16); }
+    .lbl { font-size: 11px; letter-spacing: .14em; }
+    .small { font-size: 9px; letter-spacing: .10em; }
+    .leader { stroke: rgba(244,201,93,.7); stroke-width: 1; stroke-dasharray: 3 3; }
+  </style>
+
+  <rect width="900" height="880" fill="#111a1e"/>
+  <text class="t gold" x="60" y="42" font-size="18" letter-spacing=".18em">TORRANCE · BEGINNER LEVEL</text>
+  <text class="t dim" x="60" y="62" font-size="10" letter-spacing=".12em">33.8096°N 118.3547°W · 96 × 96 blocks · nautilus_craft</text>
+
+  <!-- map plate: 96 blocks at 8 px each -->
+  <g transform="translate(60,80)">
+    <rect x="0" y="0" width="768" height="768" fill="#6fae4a"/>
+    <!-- sidewalks -->
+    <rect x="0" y="336" width="768" height="16" fill="#c9c4b4"/>
+    <rect x="0" y="400" width="768" height="16" fill="#c9c4b4"/>
+    <rect x="336" y="0" width="16" height="768" fill="#c9c4b4"/>
+    <rect x="400" y="0" width="16" height="768" fill="#c9c4b4"/>
+    <!-- carriageway -->
+    <rect x="0" y="352" width="768" height="48" fill="#3a3f45"/>
+    <rect x="352" y="0" width="48" height="768" fill="#3a3f45"/>
+    <rect x="0" y="368" width="768" height="8" fill="#e8c34a"/>
+    <rect x="368" y="0" width="8" height="768" fill="#e8c34a"/>
+
+    <!-- spawn plaza -->
+    <rect x="304" y="240" width="160" height="96" fill="#c9c4b4" stroke="#a8a292" stroke-width="2"/>
+    <rect x="344" y="248" width="80" height="80" fill="#bdb8a8"/>
+    <circle cx="384" cy="288" r="9" fill="#f4c95d" stroke="#161208" stroke-width="2"/>
+    <text class="t" x="384" y="292" font-size="9" text-anchor="middle" fill="#161208">SPAWN</text>
+
+    <!-- paths -->
+    <g stroke="#e0d3ae" stroke-width="14" fill="none" stroke-linecap="square">
+      <path d="M304 280 H200 V312"/>
+      <path d="M464 280 H576 V240"/>
+      <path d="M384 336 V664"/>
+      <path d="M400 432 H528 V576"/>
+      <path d="M200 400 V456 H240"/>
+    </g>
+
+    <!-- community garden -->
+    <rect x="80" y="80" width="232" height="232" fill="#e0d3ae" stroke="#2f5f2a" stroke-width="8"/>
+    <g fill="#4e3927">
+      <rect x="112" y="112" width="40" height="48"/>
+      <rect x="240" y="112" width="40" height="48"/>
+      <rect x="112" y="240" width="40" height="48"/>
+      <rect x="240" y="240" width="40" height="48"/>
+    </g>
+    <g fill="#b9a34a">
+      <rect x="120" y="120" width="6" height="32"/><rect x="132" y="120" width="6" height="32"/><rect x="144" y="120" width="6" height="32"/>
+      <rect x="248" y="120" width="6" height="32"/><rect x="260" y="120" width="6" height="32"/><rect x="272" y="120" width="6" height="32"/>
+      <rect x="120" y="248" width="6" height="32"/><rect x="132" y="248" width="6" height="32"/><rect x="144" y="248" width="6" height="32"/>
+      <rect x="248" y="248" width="6" height="32"/><rect x="260" y="248" width="6" height="32"/><rect x="272" y="248" width="6" height="32"/>
+    </g>
+    <rect x="240" y="88" width="48" height="40" fill="#a9793f" stroke="#8a5f2f" stroke-width="3"/>
+    <text class="t" x="96" y="104" font-size="8" fill="#2f5f2a">COMMUNITY GARDEN</text>
+
+    <!-- lago seco park -->
+    <ellipse cx="584" cy="200" rx="88" ry="64" fill="#2f7fd6" stroke="#ddcf9b" stroke-width="8"/>
+    <rect x="576" y="216" width="16" height="72" fill="#a9793f" stroke="#8a5f2f" stroke-width="2"/>
+    <rect x="640" y="96" width="40" height="40" fill="#c9c4b4" stroke="#3f6f9e" stroke-width="4"/>
+    <g fill="#3f7d33">
+      <circle cx="480" cy="96" r="12"/><circle cx="700" cy="96" r="14"/><circle cx="480" cy="300" r="12"/><circle cx="700" cy="300" r="14"/>
+    </g>
+    <text class="t" x="500" y="88" font-size="8" fill="#bfe8ff">LAGO SECO PARK</text>
+
+    <!-- coffee bean -->
+    <rect x="496" y="480" width="104" height="88" fill="#dcdcd6" stroke="#3f7d55" stroke-width="8"/>
+    <rect x="504" y="536" width="88" height="16" fill="#2f7d4f"/>
+    <text class="t" x="548" y="528" font-size="8" text-anchor="middle" fill="#161208">COFFEE</text>
+    <text class="t" x="500" y="592" font-size="8" fill="#3f7d55">THE COFFEE BEAN</text>
+
+    <!-- martin chevrolet -->
+    <rect x="96" y="464" width="216" height="184" fill="#3a3f45"/>
+    <rect x="112" y="480" width="64" height="48" fill="#dcdcd6" stroke="#8e9498" stroke-width="3"/>
+    <g fill="#b23a32"><rect x="120" y="544" width="18" height="30"/><rect x="188" y="544" width="18" height="30"/></g>
+    <g fill="#335f9e"><rect x="120" y="584" width="18" height="30"/><rect x="188" y="584" width="18" height="30"/></g>
+    <g fill="#b9bec2"><rect x="248" y="544" width="18" height="30"/><rect x="248" y="584" width="18" height="30"/></g>
+    <rect x="216" y="608" width="32" height="24" fill="#9c4a3c"/>
+    <text class="t" x="100" y="472" font-size="8" fill="#f4c95d">MARTIN CHEVROLET</text>
+
+    <!-- free build -->
+    <rect x="320" y="672" width="136" height="72" fill="#c9b98e" stroke="#a89871" stroke-width="3"/>
+    <g fill="#dcdcd6" stroke="#8e9498" stroke-width="2">
+      <rect x="336" y="696" width="14" height="14"/><rect x="356" y="696" width="14" height="14"/>
+      <rect x="376" y="696" width="14" height="14"/><rect x="396" y="696" width="14" height="14"/>
+    </g>
+    <text class="t" x="388" y="688" font-size="8" text-anchor="middle" fill="#6b4a2a">FREE BUILD</text>
+
+    <!-- border -->
+    <rect x="0" y="0" width="768" height="768" fill="none" stroke="#2f5f2a" stroke-width="10"/>
+  </g>
+
+  <!-- labels and legend -->
+  <g transform="translate(60,80)">
+    <line class="leader" x1="192" y1="104" x2="70" y2="790"/>
+    <text class="t green lbl" x="66" y="808">COMMUNITY GARDEN</text>
+    <text class="t dim small" x="66" y="822">wheat, carrots, shed, trough</text>
+
+    <line class="leader" x1="600" y1="150" x2="700" y2="790"/>
+    <text class="t blue lbl" x="700" y="808">LAGO SECO PARK</text>
+    <text class="t dim small" x="700" y="822">pond, pier, gazebo</text>
+
+    <line class="leader" x1="548" y1="520" x2="330" y2="790"/>
+    <text class="t gold lbl" x="326" y="808">THE COFFEE BEAN</text>
+    <text class="t dim small" x="326" y="822">counter, patio, awning</text>
+
+    <line class="leader" x1="180" y1="540" x2="470" y2="790"/>
+    <text class="t gold lbl" x="470" y="808">MARTIN CHEVROLET</text>
+    <text class="t dim small" x="470" y="822">lot, six cars, podium</text>
+  </g>
+
+  <g transform="translate(838,110)">
+    <circle r="26" fill="rgba(9,15,18,.9)" stroke="rgba(255,255,255,.18)"/>
+    <path d="M0 -16 L8 8 L0 3 L-8 8 Z" fill="#f4c95d"/>
+    <text class="t dim" x="0" y="42" font-size="10" text-anchor="middle">N</text>
+  </g>
+
+  <text class="t dim" x="60" y="858" font-size="9" letter-spacing=".12em">SERVED BY NGINX · /nautilus/minecraft · ASSETS IN POSTGRES nautilus_craft · game_world / game_assets</text>
+</svg>

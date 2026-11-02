@@ -1,0 +1,12 @@
+types {
+    text/html                             html htm;
+    text/css                              css;
+    text/plain                            txt;
+    application/javascript                js;
+    application/json                      json;
+    image/svg+xml                         svg;
+    image/png                             png;
+    image/x-icon                          ico;
+    audio/mpeg                            mp3;
+    audio/wav                             wav;
+}

@@ -1,0 +1,33 @@
+#!/bin/sh
+#
+# Public HTTP + WebSocket front. The WebView's /embed/ fetch and the browser
+# both come through this listener (80 and 8080).
+#
+NGINX=/usr/sbin/nginx
+CONF=/etc/nginx/nginx.conf
+
+case "$1" in
+  start)
+    printf "Starting nginx: "
+    mkdir -p /var/log/nginx /var/lib/nginx /var/run
+    $NGINX -t -c "$CONF" && $NGINX -c "$CONF"
+    echo "OK"
+    ;;
+  stop)
+    printf "Stopping nginx: "
+    $NGINX -s stop -c "$CONF" 2>/dev/null || true
+    echo "OK"
+    ;;
+  reload)
+    $NGINX -s reload -c "$CONF" 2>/dev/null || true
+    ;;
+  restart)
+    "$0" stop
+    sleep 1
+    "$0" start
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|reload|restart}"
+    exit 1
+    ;;
+esac
