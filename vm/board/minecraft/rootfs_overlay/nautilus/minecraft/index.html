@@ -2614,6 +2614,7 @@ const state = {
   epochCohort: 1,
   cohortStart: Date.now(),
   epochArchive: [],
+  fog: [],
   campaign: { pve: 0, trade: 0, haul: 0, explore: 0, skirmish: 0, closed: false },
   contracts: null,
   rep: { completed: 0, failed: 0 },
@@ -2642,7 +2643,7 @@ function saveNow() {
       relations: state.relations, goal: state.goal, guidance: state.guidance,
       epoch: state.epoch, epochStart: state.epochStart, epochCohort: state.epochCohort,
       cohortStart: state.cohortStart, epochArchive: state.epochArchive,
-      campaign: state.campaign, contracts: state.contracts, rep: state.rep, mer: state.mer,
+      fog: state.fog, campaign: state.campaign, contracts: state.contracts, rep: state.rep, mer: state.mer,
       farmDay: state.farmDay, farmed: state.farmed, placed: state.placed, broken: state.broken,
       started: state.started, finished: state.finished, edits: e
     }));
@@ -2675,6 +2676,7 @@ function loadSave() {
     state.epochCohort = typeof s.epochCohort === 'number' ? s.epochCohort : 1;
     state.cohortStart = typeof s.cohortStart === 'number' ? s.cohortStart : Date.now();
     state.epochArchive = Array.isArray(s.epochArchive) ? s.epochArchive : [];
+    state.fog = Array.isArray(s.fog) ? s.fog.filter((n) => Number.isInteger(n)) : [];
     state.campaign = s.campaign && typeof s.campaign === 'object'
       ? { pve: 0, trade: 0, haul: 0, explore: 0, skirmish: 0, closed: false, ...s.campaign }
       : { pve: 0, trade: 0, haul: 0, explore: 0, skirmish: 0, closed: false };
@@ -3606,6 +3608,20 @@ function hex(h) {
   const n = parseInt(h.replace('#', ''), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
+const FOG_REVEAL = 2; // chunks revealed around the player
+function revealChunks() {
+  const cx = Math.floor(player.x / CH), cz = Math.floor(player.z / CH);
+  let changed = false;
+  for (let dz = -FOG_REVEAL; dz <= FOG_REVEAL; dz++) {
+    for (let dx = -FOG_REVEAL; dx <= FOG_REVEAL; dx++) {
+      const x = cx + dx, z = cz + dz;
+      if (x < 0 || z < 0 || x >= CX || z >= CZ) continue;
+      const i = z * CX + x;
+      if (!state.fog.includes(i)) { state.fog.push(i); changed = true; }
+    }
+  }
+  if (changed) saveSoon();
+}
 function drawMap() {
   if (!mapBase || !minimapEl.classList.contains('show')) return;
   const g = mapCanvas.getContext('2d');
@@ -3618,6 +3634,28 @@ function drawMap() {
   g.fillStyle = '#f4c95d';
   g.beginPath(); g.arc(px, pz, 3.4, 0, Math.PI * 2); g.fill();
   g.strokeStyle = 'rgba(0,0,0,.55)'; g.lineWidth = 1; g.stroke();
+  // Fog of war: undiscovered chunks stay dark until the player walks near.
+  const cw = 192 / CX, chh = 192 / CZ;
+  for (let z = 0; z < CZ; z++) {
+    for (let x = 0; x < CX; x++) {
+      if (state.fog.includes(z * CX + x)) continue;
+      g.fillStyle = 'rgba(4, 10, 12, 0.86)';
+      g.fillRect(x * cw, z * chh, cw + 0.5, chh + 0.5);
+      g.strokeStyle = 'rgba(94, 234, 212, 0.10)';
+      g.strokeRect(x * cw + 0.5, z * chh + 0.5, cw - 1, chh - 1);
+    }
+  }
+  // Businesses as resource points: a gold node with the item's first letter.
+  for (const b of BUSINESSES) {
+    const bx = (b.x / WX) * 192, bz = (b.z / WZ) * 192;
+    g.fillStyle = '#f4c95d';
+    g.beginPath(); g.arc(bx, bz, 3.2, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(0,0,0,.65)'; g.lineWidth = 1; g.stroke();
+    g.fillStyle = '#0b1f22';
+    g.font = 'bold 6px system-ui';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText((b.item || '?').slice(0, 1).toUpperCase(), bx, bz + 0.5);
+  }
 }
 
 // ----------------------------------------------------------------- matrices --
@@ -3817,6 +3855,7 @@ function frame(now) {
   }
   renderShards();
   renderEpoch();
+  if (started) revealChunks();
 
   netDrain(handleTopicMessage);
   drainMapQueue();
@@ -4034,6 +4073,7 @@ function resetWorld() {
   state.relations = {};
   state.goal = 'growth';
   state.guidance = '';
+  state.fog = [];
   state.campaign = { pve: 0, trade: 0, haul: 0, explore: 0, skirmish: 0, closed: false };
   state.contracts = null;
   state.rep = { completed: 0, failed: 0 };
