@@ -15,7 +15,7 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 OUT="${1:-$HOME/work/tmp/minecraft-state.bin}"
 mkdir -p "$(dirname "$OUT")"
 MEMORY="${MEMORY:-768}"
-PORT="${PORT:-18446}"
+PORT="${PORT:-18456}"
 
 if [ ! -d "$ROOT/runtime/lib" ]; then
     echo "validate: missing vm/runtime/lib; copy the v86 page assets first" >&2
