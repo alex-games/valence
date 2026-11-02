@@ -37,8 +37,8 @@ sleep 1
 curl -fsS -o /dev/null "http://127.0.0.1:$PORT/vm/index.html"
 
 echo "== cold boot with the real v86 page (memory ${MEMORY} MB)"
-HARNESS="$ROOT/../age-of-intellect/tools/vmrelay-harness"
-[ -d "$HARNESS" ] || HARNESS="$ROOT/../workagent-3/tools/vmrelay-harness"
+HARNESS="$ROOT/../../age-of-intellect/tools/vmrelay-harness"
+[ -d "$HARNESS" ] || HARNESS="$ROOT/../../workagent-3/tools/vmrelay-harness"
 cd "$HARNESS"
 export WA_RELAY_PORT="${RELAY_PORT:-8891}"
 ./run-snapshot.sh "$OUT" \
