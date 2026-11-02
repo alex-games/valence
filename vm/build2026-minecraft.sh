@@ -4,6 +4,8 @@
 #   ./build2026-minecraft.sh            build and publish the payload
 #   ./build2026-minecraft.sh --no-cache bypass the docker layer cache
 #   ./build2026-minecraft.sh --clean    wipe the package tarball cache
+#   ./build2026-minecraft.sh --require-ccache
+#                                       fail if Redis saw no compiler traffic
 #
 # This is deliberately a separate image from the business (pg-browser) VM:
 #   config/board/minecraft/               board, overlay, nginx, Mosquitto
@@ -26,12 +28,14 @@ LOCAL_CCACHE_DIR="$CACHE_DIR/ccache"
 ARTIFACT_DIR="$PWD/build-2026-minecraft"
 DOCKER_CACHE_ARGS=""
 CLEAN=0
+REQUIRE_CCACHE=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --clean) CLEAN=1 ;;
         --no-cache) DOCKER_CACHE_ARGS="--no-cache" ;;
         --no-stage) : ;;
+        --require-ccache) REQUIRE_CCACHE=1 ;;
         -h|--help)
             sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
@@ -102,7 +106,20 @@ for _ in $(seq 1 20); do
     sleep 0.5
 done
 
+redis_num() {
+    docker exec buildroot-redis redis-cli info stats 2>/dev/null \
+        | awk -F: -v k="$1" '$1==k {gsub(/\r/,"",$2); print $2; exit}'
+}
+redis_keys() {
+    docker exec buildroot-redis redis-cli dbsize 2>/dev/null | tr -dc '0-9'
+}
+redis_keys_before="$(redis_keys)"; redis_keys_before="${redis_keys_before:-0}"
+redis_cmds_before="$(redis_num total_commands_processed)"; redis_cmds_before="${redis_cmds_before:-0}"
+redis_hits_before="$(redis_num keyspace_hits)"; redis_hits_before="${redis_hits_before:-0}"
+redis_misses_before="$(redis_num keyspace_misses)"; redis_misses_before="${redis_misses_before:-0}"
+
 echo "== building ${BOARD} (${BUILD_ROOT_RELEASE}) =="
+echo "ccache: before keys=${redis_keys_before} commands=${redis_cmds_before} hits=${redis_hits_before} misses=${redis_misses_before}"
 start=$(date +%s)
 docker run \
     --rm \
@@ -121,8 +138,22 @@ docker run \
 rc=$?
 elapsed=$(( $(date +%s) - start ))
 echo "== ${BOARD} build finished in ${elapsed}s (exit ${rc}) =="
-if docker ps -q -f name=^/buildroot-redis$ >/dev/null 2>&1; then
-    echo "ccache: keys=$(docker exec buildroot-redis redis-cli dbsize 2>/dev/null | tr -dc '0-9') $(docker exec buildroot-redis redis-cli info stats 2>/dev/null | grep -E '^(keyspace_hits|keyspace_misses):' | tr '\n' ' ')"
+redis_keys_after="$(redis_keys)"; redis_keys_after="${redis_keys_after:-0}"
+redis_cmds_after="$(redis_num total_commands_processed)"; redis_cmds_after="${redis_cmds_after:-0}"
+redis_hits_after="$(redis_num keyspace_hits)"; redis_hits_after="${redis_hits_after:-0}"
+redis_misses_after="$(redis_num keyspace_misses)"; redis_misses_after="${redis_misses_after:-0}"
+ops_delta=$((redis_cmds_after - redis_cmds_before))
+hits_delta=$((redis_hits_after - redis_hits_before))
+misses_delta=$((redis_misses_after - redis_misses_before))
+echo "ccache: after keys=${redis_keys_after} commands=${redis_cmds_after} hits=${redis_hits_after} misses=${redis_misses_after}"
+echo "ccache: delta keys=$((redis_keys_after - redis_keys_before)) ops=${ops_delta} hits=${hits_delta} misses=${misses_delta}"
+if [ "$REQUIRE_CCACHE" -eq 1 ] && [ "$rc" -eq 0 ]; then
+    if [ "$redis_keys_after" -eq 0 ] || [ "$ops_delta" -le 0 ] || [ "$((hits_delta + misses_delta))" -le 0 ]; then
+        echo "ccache: FAIL -- Redis saw no compiler traffic; remote_storage is not reaching the build" >&2
+        rc=4
+    else
+        echo "ccache: PASS -- Redis saw compiler traffic"
+    fi
 fi
 if [ "$rc" -eq 0 ]; then
     echo "payload: $ARTIFACT_DIR/filesystem"
