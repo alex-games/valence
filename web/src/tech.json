@@ -1,0 +1,1253 @@
+{
+  "version": 1,
+  "game": "Torrance",
+  "title": "Torrance Technology Tree, 2026–2126",
+  "eras": [
+    {
+      "id": "information",
+      "name": "Information Age",
+      "years": "2020–2032",
+      "gate": 0,
+      "culture": 0
+    },
+    {
+      "id": "intelligence",
+      "name": "Intelligence Age",
+      "years": "2032–2048",
+      "gate": 4,
+      "culture": 20
+    },
+    {
+      "id": "fusion",
+      "name": "Fusion Age",
+      "years": "2048–2065",
+      "gate": 8,
+      "culture": 60
+    },
+    {
+      "id": "interplanetary",
+      "name": "Interplanetary Age",
+      "years": "2065–2090",
+      "gate": 12,
+      "culture": 120
+    },
+    {
+      "id": "postbiological",
+      "name": "Post-biological Age",
+      "years": "2090–2126",
+      "gate": 16,
+      "culture": 200
+    }
+  ],
+  "focus": [
+    "energy",
+    "ai",
+    "bio",
+    "space",
+    "climate",
+    "culture"
+  ],
+  "nodes": [
+    {
+      "id": "llm_agents",
+      "name": "LLM Agents",
+      "era": "information",
+      "cost": 20,
+      "prereqs": [],
+      "yields": {
+        "science": 1,
+        "culture": 1
+      },
+      "toil": 5,
+      "unlocks": [
+        "gameAssistant reports",
+        "market summaries"
+      ],
+      "evidence": "2026: agentic LLMs in production"
+    },
+    {
+      "id": "mcp_tools",
+      "name": "Tool Protocol (MCP)",
+      "era": "information",
+      "cost": 15,
+      "prereqs": [
+        "llm_agents"
+      ],
+      "yields": {
+        "science": 1
+      },
+      "toil": 3,
+      "unlocks": [
+        "voice C2 tools",
+        "gameAssistant actions"
+      ],
+      "evidence": "2025–2026 MCP adoption"
+    },
+    {
+      "id": "edge_inference",
+      "name": "Edge Inference",
+      "era": "information",
+      "cost": 20,
+      "prereqs": [
+        "llm_agents"
+      ],
+      "yields": {
+        "science": 1
+      },
+      "toil": 2,
+      "unlocks": [
+        "on-device assistant",
+        "private voice"
+      ],
+      "evidence": "2026 on-device NPUs"
+    },
+    {
+      "id": "six_g",
+      "name": "6G / Low-latency Mesh",
+      "era": "information",
+      "cost": 25,
+      "prereqs": [
+        "edge_inference"
+      ],
+      "yields": {
+        "gold": 1
+      },
+      "toil": 0,
+      "unlocks": [
+        "autonomous transit",
+        "digital twins"
+      ],
+      "evidence": "2026 6G trials"
+    },
+    {
+      "id": "digital_twins",
+      "name": "Digital Twins",
+      "era": "information",
+      "cost": 25,
+      "prereqs": [
+        "llm_agents"
+      ],
+      "yields": {
+        "production": 1,
+        "science": 1
+      },
+      "toil": 2,
+      "unlocks": [
+        "simulation policy",
+        "SMR siting"
+      ],
+      "evidence": "2026 industrial digital twins"
+    },
+    {
+      "id": "humanoid_robotics",
+      "name": "Humanoid Robotics",
+      "era": "information",
+      "cost": 35,
+      "prereqs": [
+        "edge_inference"
+      ],
+      "yields": {
+        "production": 2
+      },
+      "toil": 5,
+      "unlocks": [
+        "factory units",
+        "robotic farm help"
+      ],
+      "evidence": "2026: China >100k units expected; Unitree 2028 voice-task target"
+    },
+    {
+      "id": "solar_storage",
+      "name": "Solar + Storage",
+      "era": "information",
+      "cost": 20,
+      "prereqs": [],
+      "yields": {
+        "production": 1,
+        "gold": 1
+      },
+      "toil": 1,
+      "unlocks": [
+        "vertical farms",
+        "EV grid"
+      ],
+      "evidence": "2026 solar deployment"
+    },
+    {
+      "id": "ev_grid",
+      "name": "EV / V2G Grid",
+      "era": "information",
+      "cost": 25,
+      "prereqs": [
+        "solar_storage"
+      ],
+      "yields": {
+        "gold": 1,
+        "production": 1
+      },
+      "toil": 0,
+      "unlocks": [
+        "smart grid"
+      ],
+      "evidence": "2026 EV and V2G pilots"
+    },
+    {
+      "id": "mrna_platform",
+      "name": "mRNA Platform",
+      "era": "information",
+      "cost": 20,
+      "prereqs": [],
+      "yields": {
+        "culture": 1
+      },
+      "toil": 0,
+      "unlocks": [
+        "rapid vaccines",
+        "bio lab"
+      ],
+      "evidence": "2026 mRNA therapeutics"
+    },
+    {
+      "id": "crispr_therapy",
+      "name": "CRISPR Therapy",
+      "era": "information",
+      "cost": 30,
+      "prereqs": [
+        "mrna_platform"
+      ],
+      "yields": {
+        "science": 1,
+        "culture": 1
+      },
+      "toil": 0,
+      "unlocks": [
+        "longevity",
+        "synthetic biology"
+      ],
+      "evidence": "2026 gene-editing approvals"
+    },
+    {
+      "id": "quantum_error_correction",
+      "name": "Quantum Error Correction",
+      "era": "information",
+      "cost": 35,
+      "prereqs": [],
+      "yields": {
+        "science": 2
+      },
+      "toil": 0,
+      "unlocks": [
+        "quantum advantage",
+        "fusion materials"
+      ],
+      "evidence": "2026: IBM $10B roadmap to fault-tolerant quantum; ORNL/IBM fusion-materials computation"
+    },
+    {
+      "id": "carbon_capture",
+      "name": "Carbon Capture",
+      "era": "information",
+      "cost": 30,
+      "prereqs": [
+        "solar_storage"
+      ],
+      "yields": {
+        "production": 1,
+        "culture": 1
+      },
+      "toil": 0,
+      "unlocks": [
+        "climate restoration"
+      ],
+      "evidence": "2026 DAC pilots"
+    },
+    {
+      "id": "vertical_farms",
+      "name": "Vertical Farms",
+      "era": "information",
+      "cost": 25,
+      "prereqs": [
+        "solar_storage"
+      ],
+      "yields": {
+        "food": 2
+      },
+      "toil": 2,
+      "unlocks": [
+        "lab food",
+        "closed-loop cities"
+      ],
+      "evidence": "2026 indoor agriculture"
+    },
+    {
+      "id": "agi_science",
+      "name": "AI Co-Scientist",
+      "era": "intelligence",
+      "cost": 50,
+      "prereqs": [
+        "llm_agents",
+        "quantum_error_correction"
+      ],
+      "yields": {
+        "science": 3
+      },
+      "toil": 8,
+      "unlocks": [
+        "autonomous labs",
+        "SGI"
+      ],
+      "evidence": "2026 AI-for-science programs"
+    },
+    {
+      "id": "autonomous_labs",
+      "name": "Autonomous Labs",
+      "era": "intelligence",
+      "cost": 55,
+      "prereqs": [
+        "agi_science",
+        "humanoid_robotics"
+      ],
+      "yields": {
+        "science": 3,
+        "production": 1
+      },
+      "toil": 6,
+      "unlocks": [
+        "self-driving research",
+        "fusion pilot"
+      ],
+      "evidence": "2026 self-driving lab pilots"
+    },
+    {
+      "id": "general_robotics",
+      "name": "General-purpose Robots",
+      "era": "intelligence",
+      "cost": 60,
+      "prereqs": [
+        "humanoid_robotics",
+        "agi_science"
+      ],
+      "yields": {
+        "production": 3
+      },
+      "toil": 8,
+      "unlocks": [
+        "automated construction",
+        "lunar industry"
+      ],
+      "evidence": "2026 humanoid scale-up"
+    },
+    {
+      "id": "quantum_advantage",
+      "name": "Quantum Advantage",
+      "era": "intelligence",
+      "cost": 60,
+      "prereqs": [
+        "quantum_error_correction",
+        "six_g"
+      ],
+      "yields": {
+        "science": 3,
+        "gold": 1
+      },
+      "toil": 0,
+      "unlocks": [
+        "quantum internet",
+        "materials discovery"
+      ],
+      "evidence": "2026 fault-tolerant roadmaps"
+    },
+    {
+      "id": "synthetic_biology",
+      "name": "Synthetic Biology",
+      "era": "intelligence",
+      "cost": 55,
+      "prereqs": [
+        "crispr_therapy",
+        "agi_science"
+      ],
+      "yields": {
+        "food": 2,
+        "science": 2
+      },
+      "toil": 3,
+      "unlocks": [
+        "lab food",
+        "molecular manufacturing"
+      ],
+      "evidence": "2026 engineered organisms"
+    },
+    {
+      "id": "lab_food",
+      "name": "Cultivated Food",
+      "era": "intelligence",
+      "cost": 45,
+      "prereqs": [
+        "synthetic_biology",
+        "vertical_farms"
+      ],
+      "yields": {
+        "food": 3
+      },
+      "toil": 2,
+      "unlocks": [
+        "closed-loop cities"
+      ],
+      "evidence": "2026 cultivated-protein pilots"
+    },
+    {
+      "id": "smr",
+      "name": "Small Modular Reactors",
+      "era": "intelligence",
+      "cost": 50,
+      "prereqs": [
+        "solar_storage",
+        "digital_twins"
+      ],
+      "yields": {
+        "production": 2,
+        "gold": 1
+      },
+      "toil": 0,
+      "unlocks": [
+        "fusion pilot",
+        "smart grid"
+      ],
+      "evidence": "2026 SMR licensing"
+    },
+    {
+      "id": "smart_grid",
+      "name": "Smart Grid",
+      "era": "intelligence",
+      "cost": 45,
+      "prereqs": [
+        "ev_grid",
+        "smr"
+      ],
+      "yields": {
+        "production": 2,
+        "gold": 1
+      },
+      "toil": 1,
+      "unlocks": [
+        "commercial fusion"
+      ],
+      "evidence": "2026 grid AI"
+    },
+    {
+      "id": "bci",
+      "name": "Brain–Computer Interface",
+      "era": "intelligence",
+      "cost": 60,
+      "prereqs": [
+        "agi_science",
+        "quantum_advantage"
+      ],
+      "yields": {
+        "science": 2,
+        "culture": 2
+      },
+      "toil": 2,
+      "unlocks": [
+        "full BCI",
+        "mind upload"
+      ],
+      "evidence": "2026 BCI trials"
+    },
+    {
+      "id": "longevity",
+      "name": "Longevity Therapies",
+      "era": "intelligence",
+      "cost": 65,
+      "prereqs": [
+        "crispr_therapy",
+        "synthetic_biology"
+      ],
+      "yields": {
+        "culture": 3
+      },
+      "toil": 1,
+      "unlocks": [
+        "post-biological"
+      ],
+      "evidence": "2026 aging research"
+    },
+    {
+      "id": "solid_state_batteries",
+      "name": "Solid-state Batteries",
+      "era": "intelligence",
+      "cost": 40,
+      "prereqs": [
+        "solar_storage"
+      ],
+      "yields": {
+        "production": 2
+      },
+      "toil": 1,
+      "unlocks": [
+        "EV grid",
+        "autonomous transit"
+      ],
+      "evidence": "2026 solid-state pilots"
+    },
+    {
+      "id": "fusion_pilot",
+      "name": "Fusion Pilot Plant",
+      "era": "fusion",
+      "cost": 80,
+      "prereqs": [
+        "smr",
+        "quantum_advantage"
+      ],
+      "yields": {
+        "production": 3,
+        "science": 2
+      },
+      "toil": 0,
+      "unlocks": [
+        "commercial fusion",
+        "space solar"
+      ],
+      "evidence": "2026 fusion milestones"
+    },
+    {
+      "id": "commercial_fusion",
+      "name": "Commercial Fusion",
+      "era": "fusion",
+      "cost": 100,
+      "prereqs": [
+        "fusion_pilot",
+        "smart_grid"
+      ],
+      "yields": {
+        "production": 5,
+        "gold": 3
+      },
+      "toil": 5,
+      "unlocks": [
+        "orbital manufacturing",
+        "antimatter"
+      ],
+      "evidence": "post-2040 forecast (speculative)"
+    },
+    {
+      "id": "orbital_manufacturing",
+      "name": "Orbital Manufacturing",
+      "era": "fusion",
+      "cost": 90,
+      "prereqs": [
+        "commercial_fusion",
+        "autonomous_transit"
+      ],
+      "yields": {
+        "production": 3,
+        "gold": 2
+      },
+      "toil": 2,
+      "unlocks": [
+        "lunar industry",
+        "space solar"
+      ],
+      "evidence": "2026 space-data-center proposals; 2050 forecast"
+    },
+    {
+      "id": "lunar_industry",
+      "name": "Lunar Industry",
+      "era": "fusion",
+      "cost": 100,
+      "prereqs": [
+        "orbital_manufacturing",
+        "general_robotics"
+      ],
+      "yields": {
+        "production": 3,
+        "science": 2
+      },
+      "toil": 1,
+      "unlocks": [
+        "asteroid mining",
+        "Mars outpost"
+      ],
+      "evidence": "2050 moon-hotel/mining forecasts (speculative)"
+    },
+    {
+      "id": "molecular_manufacturing",
+      "name": "Molecular Manufacturing",
+      "era": "fusion",
+      "cost": 100,
+      "prereqs": [
+        "synthetic_biology",
+        "quantum_advantage"
+      ],
+      "yields": {
+        "production": 4
+      },
+      "toil": 6,
+      "unlocks": [
+        "programmable matter",
+        "closed-loop cities"
+      ],
+      "evidence": "speculative"
+    },
+    {
+      "id": "climate_restoration",
+      "name": "Climate Restoration",
+      "era": "fusion",
+      "cost": 90,
+      "prereqs": [
+        "carbon_capture",
+        "commercial_fusion"
+      ],
+      "yields": {
+        "food": 2,
+        "culture": 3
+      },
+      "toil": 1,
+      "unlocks": [
+        "terraforming",
+        "Kardashev I"
+      ],
+      "evidence": "2026 DAC + fusion forecast"
+    },
+    {
+      "id": "quantum_internet",
+      "name": "Quantum Internet",
+      "era": "fusion",
+      "cost": 90,
+      "prereqs": [
+        "quantum_advantage",
+        "six_g"
+      ],
+      "yields": {
+        "science": 3
+      },
+      "toil": 1,
+      "unlocks": [
+        "full BCI",
+        "galactic internet"
+      ],
+      "evidence": "2026 quantum networking"
+    },
+    {
+      "id": "programmable_matter",
+      "name": "Programmable Matter",
+      "era": "fusion",
+      "cost": 110,
+      "prereqs": [
+        "molecular_manufacturing",
+        "general_robotics"
+      ],
+      "yields": {
+        "production": 4
+      },
+      "toil": 6,
+      "unlocks": [
+        "stellar engineering"
+      ],
+      "evidence": "speculative"
+    },
+    {
+      "id": "full_bci",
+      "name": "Full BCI",
+      "era": "fusion",
+      "cost": 100,
+      "prereqs": [
+        "bci",
+        "agi_science"
+      ],
+      "yields": {
+        "science": 3,
+        "culture": 3
+      },
+      "toil": 3,
+      "unlocks": [
+        "mind upload"
+      ],
+      "evidence": "speculative"
+    },
+    {
+      "id": "space_solar",
+      "name": "Space-based Solar",
+      "era": "interplanetary",
+      "cost": 130,
+      "prereqs": [
+        "commercial_fusion",
+        "orbital_manufacturing"
+      ],
+      "yields": {
+        "production": 5,
+        "gold": 3
+      },
+      "toil": 1,
+      "unlocks": [
+        "Dyson swarm",
+        "Kardashev I"
+      ],
+      "evidence": "2026 space-data-center proposals; speculative"
+    },
+    {
+      "id": "asteroid_mining",
+      "name": "Asteroid Mining",
+      "era": "interplanetary",
+      "cost": 120,
+      "prereqs": [
+        "orbital_manufacturing",
+        "lunar_industry"
+      ],
+      "yields": {
+        "production": 4,
+        "gold": 3
+      },
+      "toil": 1,
+      "unlocks": [
+        "Dyson swarm"
+      ],
+      "evidence": "2050 mining forecast"
+    },
+    {
+      "id": "mars_outpost",
+      "name": "Mars Outpost",
+      "era": "interplanetary",
+      "cost": 110,
+      "prereqs": [
+        "lunar_industry",
+        "lab_food"
+      ],
+      "yields": {
+        "culture": 3,
+        "science": 2
+      },
+      "toil": 1,
+      "unlocks": [
+        "terraforming"
+      ],
+      "evidence": "2026 Mars plans; speculative"
+    },
+    {
+      "id": "mind_upload",
+      "name": "Mind Upload",
+      "era": "interplanetary",
+      "cost": 160,
+      "prereqs": [
+        "full_bci",
+        "quantum_internet"
+      ],
+      "yields": {
+        "science": 4,
+        "culture": 4
+      },
+      "toil": 4,
+      "unlocks": [
+        "post-biological"
+      ],
+      "evidence": "speculative"
+    },
+    {
+      "id": "synthetic_general_intelligence",
+      "name": "Synthetic General Intelligence",
+      "era": "interplanetary",
+      "cost": 150,
+      "prereqs": [
+        "agi_science",
+        "molecular_manufacturing",
+        "quantum_internet"
+      ],
+      "yields": {
+        "science": 5,
+        "production": 3
+      },
+      "toil": 10,
+      "unlocks": [
+        "post-biological",
+        "stellar engineering"
+      ],
+      "evidence": "speculative"
+    },
+    {
+      "id": "dyson_swarm",
+      "name": "Dyson Swarm",
+      "era": "interplanetary",
+      "cost": 200,
+      "prereqs": [
+        "space_solar",
+        "asteroid_mining"
+      ],
+      "yields": {
+        "production": 10,
+        "science": 4
+      },
+      "toil": 2,
+      "unlocks": [
+        "stellar engineering"
+      ],
+      "evidence": "Kardashev Type II (speculative)"
+    },
+    {
+      "id": "terraforming",
+      "name": "Terraforming",
+      "era": "interplanetary",
+      "cost": 150,
+      "prereqs": [
+        "mars_outpost",
+        "climate_restoration",
+        "molecular_manufacturing"
+      ],
+      "yields": {
+        "food": 4,
+        "culture": 4
+      },
+      "toil": 1,
+      "unlocks": [
+        "closed-loop cities"
+      ],
+      "evidence": "speculative"
+    },
+    {
+      "id": "closed_loop_cities",
+      "name": "Closed-loop Cities",
+      "era": "interplanetary",
+      "cost": 120,
+      "prereqs": [
+        "climate_restoration",
+        "lab_food"
+      ],
+      "yields": {
+        "food": 4,
+        "production": 2,
+        "culture": 2
+      },
+      "toil": 2,
+      "unlocks": [
+        "Kardashev I"
+      ],
+      "evidence": "2026 circular-city pilots"
+    },
+    {
+      "id": "interstellar_probe",
+      "name": "Interstellar Probe",
+      "era": "interplanetary",
+      "cost": 150,
+      "prereqs": [
+        "space_solar",
+        "quantum_internet"
+      ],
+      "yields": {
+        "science": 5,
+        "culture": 3
+      },
+      "toil": 0,
+      "unlocks": [
+        "galactic internet"
+      ],
+      "evidence": "100 Year Starship; 0.1c probes (speculative)"
+    },
+    {
+      "id": "antimatter_propulsion",
+      "name": "Antimatter Propulsion",
+      "era": "postbiological",
+      "cost": 220,
+      "prereqs": [
+        "interstellar_probe",
+        "commercial_fusion"
+      ],
+      "yields": {
+        "science": 5,
+        "culture": 3
+      },
+      "toil": 0,
+      "unlocks": [
+        "galactic internet"
+      ],
+      "evidence": "2050 antimatter forecast (speculative)"
+    },
+    {
+      "id": "kardashev_type_1",
+      "name": "Kardashev Type I",
+      "era": "postbiological",
+      "cost": 180,
+      "prereqs": [
+        "climate_restoration",
+        "space_solar",
+        "closed_loop_cities"
+      ],
+      "yields": {
+        "gold": 5,
+        "culture": 5
+      },
+      "toil": 0,
+      "unlocks": [
+        "planetary stewardship"
+      ],
+      "evidence": "Type I estimates ~2250 or 200–250y"
+    },
+    {
+      "id": "galactic_internet",
+      "name": "Galactic Internet",
+      "era": "postbiological",
+      "cost": 220,
+      "prereqs": [
+        "quantum_internet",
+        "interstellar_probe"
+      ],
+      "yields": {
+        "science": 6,
+        "culture": 4
+      },
+      "toil": 1,
+      "unlocks": [
+        "stellar archive"
+      ],
+      "evidence": "speculative"
+    },
+    {
+      "id": "stellar_engineering",
+      "name": "Stellar Engineering",
+      "era": "postbiological",
+      "cost": 250,
+      "prereqs": [
+        "dyson_swarm",
+        "programmable_matter"
+      ],
+      "yields": {
+        "production": 10,
+        "science": 5
+      },
+      "toil": 2,
+      "unlocks": [
+        "post-biological civilization"
+      ],
+      "evidence": "Kardashev II (speculative)"
+    },
+    {
+      "id": "wormhole_physics",
+      "name": "Wormhole Physics",
+      "era": "postbiological",
+      "cost": 300,
+      "prereqs": [
+        "quantum_internet",
+        "stellar_engineering"
+      ],
+      "yields": {
+        "science": 10,
+        "culture": 5
+      },
+      "toil": 0,
+      "unlocks": [
+        "FTL (very speculative)"
+      ],
+      "evidence": "speculative; not an engineering claim"
+    },
+    {
+      "id": "post_biological_civilization",
+      "name": "Post-biological Civilization",
+      "era": "postbiological",
+      "cost": 300,
+      "prereqs": [
+        "mind_upload",
+        "synthetic_general_intelligence"
+      ],
+      "yields": {
+        "science": 8,
+        "culture": 8
+      },
+      "toil": 10,
+      "unlocks": [
+        "endgame"
+      ],
+      "evidence": "speculative"
+    },
+    {
+      "id": "stellar_archive",
+      "name": "Stellar Archive",
+      "era": "postbiological",
+      "cost": 280,
+      "prereqs": [
+        "galactic_internet",
+        "post_biological_civilization"
+      ],
+      "yields": {
+        "culture": 10,
+        "science": 6
+      },
+      "toil": 0,
+      "unlocks": [
+        "civilization memory"
+      ],
+      "evidence": "speculative"
+    },
+    {
+      "id": "market_orders",
+      "name": "Regional Market Orders",
+      "era": "information",
+      "cost": 25,
+      "prereqs": [
+        "llm_agents",
+        "mcp_tools"
+      ],
+      "yields": {
+        "gold": 2
+      },
+      "toil": 3,
+      "unlocks": [
+        "regional order books",
+        "broker 3% / tax 2%"
+      ],
+      "evidence": "2026 marketplace APIs; EVE order-book model"
+    },
+    {
+      "id": "skirmish_doctrine",
+      "name": "Consensual Skirmish Doctrine",
+      "era": "information",
+      "cost": 30,
+      "prereqs": [
+        "humanoid_robotics",
+        "market_orders"
+      ],
+      "yields": {
+        "production": 1,
+        "culture": 1
+      },
+      "toil": 1,
+      "unlocks": [
+        "opt-in robot skirmish",
+        "business-node contests"
+      ],
+      "evidence": "2026 robot combat trials; EVE consensual PvP design"
+    },
+    {
+      "id": "insurance_market",
+      "name": "Insurance Market",
+      "era": "intelligence",
+      "cost": 35,
+      "prereqs": [
+        "market_orders",
+        "skirmish_doctrine"
+      ],
+      "yields": {
+        "gold": 2
+      },
+      "toil": 1,
+      "unlocks": [
+        "premiums",
+        "payouts",
+        "skirmish cover"
+      ],
+      "evidence": "EVE insurance model"
+    },
+    {
+      "id": "regional_contracts",
+      "name": "Regional Contracts",
+      "era": "intelligence",
+      "cost": 45,
+      "prereqs": [
+        "market_orders",
+        "six_g"
+      ],
+      "yields": {
+        "gold": 3
+      },
+      "toil": 2,
+      "unlocks": [
+        "courier contracts",
+        "auction contracts",
+        "collateral"
+      ],
+      "evidence": "EVE contracts; 2026 smart-contract tooling"
+    },
+    {
+      "id": "killmail_ledger",
+      "name": "Killmail Ledger",
+      "era": "intelligence",
+      "cost": 40,
+      "prereqs": [
+        "skirmish_doctrine",
+        "quantum_error_correction"
+      ],
+      "yields": {
+        "culture": 2
+      },
+      "toil": 1,
+      "unlocks": [
+        "anchored killmails",
+        "skirmish reputation"
+      ],
+      "evidence": "EVE killboards; 2026 verifiable logs"
+    },
+    {
+      "id": "hauling_logistics",
+      "name": "Hauling & Logistics",
+      "era": "intelligence",
+      "cost": 50,
+      "prereqs": [
+        "regional_contracts",
+        "autonomous_transit"
+      ],
+      "yields": {
+        "production": 2,
+        "gold": 2
+      },
+      "toil": 3,
+      "unlocks": [
+        "freight routes",
+        "route risk",
+        "cargo loss"
+      ],
+      "evidence": "EVE hauling; 2026 autonomous freight"
+    },
+    {
+      "id": "fleet_command",
+      "name": "Fleet Command",
+      "era": "intelligence",
+      "cost": 55,
+      "prereqs": [
+        "general_robotics",
+        "six_g"
+      ],
+      "yields": {
+        "production": 2,
+        "culture": 1
+      },
+      "toil": 4,
+      "unlocks": [
+        "voice fleet C2",
+        "formation doctrines"
+      ],
+      "evidence": "EVE fleets; 2026 multi-robot coordination"
+    },
+    {
+      "id": "market_intelligence",
+      "name": "Market Intelligence",
+      "era": "intelligence",
+      "cost": 50,
+      "prereqs": [
+        "agi_science",
+        "market_orders"
+      ],
+      "yields": {
+        "gold": 3,
+        "science": 2
+      },
+      "toil": 4,
+      "unlocks": [
+        "price discovery",
+        "speculation",
+        "assistant orders"
+      ],
+      "evidence": "EVE market tools; 2026 AI agents"
+    },
+    {
+      "id": "security_status",
+      "name": "Security Status",
+      "era": "fusion",
+      "cost": 70,
+      "prereqs": [
+        "killmail_ledger",
+        "market_orders"
+      ],
+      "yields": {
+        "culture": 2
+      },
+      "toil": 1,
+      "unlocks": [
+        "high/low-sec rules",
+        "consequences"
+      ],
+      "evidence": "EVE security status"
+    },
+    {
+      "id": "war_declarations",
+      "name": "War Declarations",
+      "era": "fusion",
+      "cost": 90,
+      "prereqs": [
+        "security_status",
+        "commercial_fusion"
+      ],
+      "yields": {
+        "production": 2,
+        "culture": 2
+      },
+      "toil": 2,
+      "unlocks": [
+        "corp wars",
+        "regional contests"
+      ],
+      "evidence": "EVE war decs"
+    },
+    {
+      "id": "faction_warfare",
+      "name": "Faction Warfare",
+      "era": "interplanetary",
+      "cost": 120,
+      "prereqs": [
+        "war_declarations",
+        "regional_contracts"
+      ],
+      "yields": {
+        "gold": 3,
+        "culture": 3
+      },
+      "toil": 1,
+      "unlocks": [
+        "NPC factions",
+        "loyalty points"
+      ],
+      "evidence": "EVE faction warfare"
+    },
+    {
+      "id": "capital_doctrine",
+      "name": "Capital Doctrine",
+      "era": "interplanetary",
+      "cost": 160,
+      "prereqs": [
+        "war_declarations",
+        "orbital_manufacturing"
+      ],
+      "yields": {
+        "production": 4
+      },
+      "toil": 2,
+      "unlocks": [
+        "capital assets",
+        "high-stakes skirmish"
+      ],
+      "evidence": "EVE capitals; speculative"
+    },
+    {
+      "id": "interstellar_trade",
+      "name": "Interstellar Trade",
+      "era": "interplanetary",
+      "cost": 140,
+      "prereqs": [
+        "space_solar",
+        "regional_contracts"
+      ],
+      "yields": {
+        "gold": 5
+      },
+      "toil": 2,
+      "unlocks": [
+        "cross-colony markets"
+      ],
+      "evidence": "EVE regional trade; speculative"
+    }
+  ],
+  "activities": {
+    "ecommerce": [
+      "market_orders",
+      "regional_contracts",
+      "hauling_logistics",
+      "market_intelligence",
+      "insurance_market",
+      "interstellar_trade"
+    ],
+    "skirmish": [
+      "skirmish_doctrine",
+      "killmail_ledger",
+      "fleet_command",
+      "security_status",
+      "war_declarations",
+      "faction_warfare",
+      "capital_doctrine"
+    ]
+  }
+}
