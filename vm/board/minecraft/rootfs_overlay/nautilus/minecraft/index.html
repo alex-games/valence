@@ -870,11 +870,22 @@ button.btn:active { transform: translateY(1px); }
     <div id="dipList" class="list"></div>
   </aside>
 
+  <aside id="campaign" class="panel hidden" aria-label="Epoch campaign and contracts">
+    <h2><span>EPOCH CAMPAIGN</span><button class="x" data-close="campaign" aria-label="Close">✕</button></h2>
+    <p class="goal" id="campProgress">0 / 30 objectives · 44 total</p>
+    <div id="campKinds" class="list"></div>
+    <h2><span>CONTRACTS</span></h2>
+    <p class="goal" id="contractRep">Reputation 0 · 3 active max</p>
+    <div id="contractList" class="list"></div>
+    <p class="why" id="merLine">MER · no trades yet</p>
+  </aside>
+
   <div id="pad" aria-label="Virtual controller">
     <button data-pad="assist">ASSIST</button>
     <button data-pad="citizens">CITIZENS</button>
     <button data-pad="market">MARKET</button>
     <button data-pad="diplomacy">RELATIONS</button>
+    <button data-pad="campaign">CAMPAIGN</button>
     <button data-pad="map">MAP</button>
     <button data-pad="claim">CLAIM</button>
     <button data-pad="talk">TALK</button>
@@ -2603,6 +2614,10 @@ const state = {
   epochCohort: 1,
   cohortStart: Date.now(),
   epochArchive: [],
+  campaign: { pve: 0, trade: 0, haul: 0, explore: 0, skirmish: 0, closed: false },
+  contracts: null,
+  rep: { completed: 0, failed: 0 },
+  mer: { faucets: 0, sinks: 0 },
   farmDay: '',
   farmed: [],
   placed: 0,
@@ -2627,6 +2642,7 @@ function saveNow() {
       relations: state.relations, goal: state.goal, guidance: state.guidance,
       epoch: state.epoch, epochStart: state.epochStart, epochCohort: state.epochCohort,
       cohortStart: state.cohortStart, epochArchive: state.epochArchive,
+      campaign: state.campaign, contracts: state.contracts, rep: state.rep, mer: state.mer,
       farmDay: state.farmDay, farmed: state.farmed, placed: state.placed, broken: state.broken,
       started: state.started, finished: state.finished, edits: e
     }));
@@ -2659,6 +2675,12 @@ function loadSave() {
     state.epochCohort = typeof s.epochCohort === 'number' ? s.epochCohort : 1;
     state.cohortStart = typeof s.cohortStart === 'number' ? s.cohortStart : Date.now();
     state.epochArchive = Array.isArray(s.epochArchive) ? s.epochArchive : [];
+    state.campaign = s.campaign && typeof s.campaign === 'object'
+      ? { pve: 0, trade: 0, haul: 0, explore: 0, skirmish: 0, closed: false, ...s.campaign }
+      : { pve: 0, trade: 0, haul: 0, explore: 0, skirmish: 0, closed: false };
+    state.contracts = Array.isArray(s.contracts) ? s.contracts : null;
+    state.rep = s.rep && typeof s.rep === 'object' ? s.rep : { completed: 0, failed: 0 };
+    state.mer = s.mer && typeof s.mer === 'object' ? s.mer : { faucets: 0, sinks: 0 };
     state.farmDay = typeof s.farmDay === 'number' ? s.farmDay : Number(s.farmDay) || 0;
     state.farmed = Array.isArray(s.farmed) ? s.farmed.filter((x) => typeof x === 'string') : [];
     state.placed = s.placed | 0; state.broken = s.broken | 0;
@@ -2795,8 +2817,10 @@ function renderShards() {
   const el = $('shards');
   if (!el) return;
   const here = shardAt(player.x, player.z);
+  const before = state.shards;
   state.shards |= 1 << here;
-  el.textContent = `${countBits(state.shards)}/${SHARD_COUNT} · S${here + 1}`;
+  if (!(before & (1 << here))) campaignAdd('explore', 1);
+  el.textContent = `${countBits(state.shards)}/${SHARD_COUNT} · S${here + 1} ${SHARD_TIERS[here]}`;
 }
 function epochDay() {
   return Math.max(1, Math.floor((Date.now() - state.epochStart) / GAME_DAY_MS) + 1);
@@ -2967,6 +2991,8 @@ async function handlePhoto(file) {
   state.inventory[b.item] = (state.inventory[b.item] || 0) + b.qty;
   state.sats += b.sats;
   state.credits += 150;
+  campaignAdd('trade', b.sats);
+  merAdd(b.sats, 0);
   renderSats();
   renderCredits();
   saveSoon();
@@ -4008,6 +4034,10 @@ function resetWorld() {
   state.relations = {};
   state.goal = 'growth';
   state.guidance = '';
+  state.campaign = { pve: 0, trade: 0, haul: 0, explore: 0, skirmish: 0, closed: false };
+  state.contracts = null;
+  state.rep = { completed: 0, failed: 0 };
+  state.mer = { faucets: 0, sinks: 0 };
   state.farmDay = '';
   state.farmed = [];
   state.placed = 0; state.broken = 0; state.started = 0; state.finished = false;
@@ -4065,6 +4095,7 @@ requestAnimationFrame(frame);
 // mapped shards. This mirrors the VM's `game_npc_roam` table.
 const SHARD_COUNT = 4;
 const SHARD_SPAN = 48;
+const SHARD_TIERS = ['STARTER', 'HIGH', 'LOW', 'NULL'];
 function shardAt(x, z) {
   return (x >= SHARD_SPAN ? 1 : 0) + (z >= SHARD_SPAN ? 2 : 0);
 }
@@ -4160,6 +4191,7 @@ function planCitizens() {
     rows.push(c.reason);
   });
   lastPlanReason = rows[0] || '';
+  campaignAdd('pve', 1);
   renderCitizens(); saveSoon();
   mqttPublish('citizens/plan', { goal: state.goal, pid: NET.pid || 'solo',
     plan: state.citizens.map((c) => ({ id: c.id, toil: c.toil, shard: c.shard })) }, 1, false);
@@ -4227,6 +4259,7 @@ function renderMarket() {
       if (state.credits < price) { toast('NOT ENOUGH CREDITS', 2000); return; }
       state.credits -= price;
       state.inventory[b.item] = (state.inventory[b.item] || 0) + 1;
+      merAdd(0, price); campaignAdd('trade', price);
       renderCredits(); renderMarket(); saveSoon();
       toast(`BOUGHT 1 ${b.item.toUpperCase()} · ${price} CREDITS`, 2000);
     });
@@ -4236,6 +4269,7 @@ function renderMarket() {
       if (!(state.inventory[b.item] > 0)) { toast('NOTHING TO SELL', 1800); return; }
       state.inventory[b.item] -= 1;
       state.credits += Math.round(price * 0.95);
+      merAdd(Math.round(price * 0.95), 0); campaignAdd('trade', price);
       renderCredits(); renderMarket(); saveSoon();
       toast(`SOLD 1 ${b.item.toUpperCase()} · 3% BROKER · 2% TAX`, 2200);
     });
@@ -4279,8 +4313,127 @@ function renderDiplomacy() {
   }
 }
 
+// ------------------------------------------------- campaigns + contracts ----
+const CAMPAIGN_KINDS = [
+  ['pve', 'NPC guards', 9, 25],
+  ['trade', 'Trade', 9, 5000],
+  ['haul', 'Haul', 9, 40],
+  ['explore', 'Explore', 8, 4],
+  ['skirmish', 'Skirmish', 9, 10]
+];
+const CAMPAIGN_WIN = 30;
+function campaignDone() {
+  let done = 0;
+  for (const [kind, , count, target] of CAMPAIGN_KINDS) {
+    done += Math.min(count, Math.floor((state.campaign[kind] || 0) / target));
+  }
+  return Math.min(44, done);
+}
+function campaignAdd(kind, amount) {
+  if (state.campaign.closed) return;
+  state.campaign[kind] = (state.campaign[kind] || 0) + Math.max(0, amount);
+  if (campaignDone() >= CAMPAIGN_WIN) {
+    state.campaign.closed = true;
+    state.credits += 500;
+    toast('CAMPAIGN WON · 30 / 44 OBJECTIVES · +500 CREDITS', 4600);
+  }
+  renderCampaign();
+  saveSoon();
+}
+function merAdd(faucets, sinks) {
+  state.mer.faucets += Math.max(0, faucets | 0);
+  state.mer.sinks += Math.max(0, sinks | 0);
+}
+function seedContracts() {
+  if (Array.isArray(state.contracts)) return;
+  state.contracts = [
+    { id: 'c1', title: 'Haul 3 crates to S2', kind: 'haul', reward: 500, collateral: 0, status: 'open' },
+    { id: 'c2', title: 'Guard the garden for a day', kind: 'guard', reward: 400, collateral: 0, status: 'open' },
+    { id: 'c3', title: 'Map S4 and report', kind: 'explore', reward: 700, collateral: 200, status: 'open' }
+  ];
+}
+function acceptContract(id) {
+  const c = state.contracts.find((x) => x.id === id);
+  if (!c || c.status !== 'open') return 'Contract is not open.';
+  const active = state.contracts.filter((x) => x.status === 'accepted').length;
+  if (active >= 3) return 'Three active contracts is the cap.';
+  c.status = 'accepted';
+  renderCampaign(); saveSoon();
+  return `${c.title} accepted. Deliver it for ${c.reward} credits.`;
+}
+function deliverContract(id) {
+  const c = state.contracts.find((x) => x.id === id);
+  if (!c || c.status !== 'accepted') return 'Accept it first.';
+  c.status = 'delivered';
+  state.credits += c.reward;
+  state.rep.completed += 1;
+  merAdd(c.reward, 0);
+  campaignAdd(c.kind === 'explore' ? 'explore' : 'haul', 1);
+  renderCredits(); renderCampaign(); saveSoon();
+  return `${c.title} delivered. +${c.reward} credits.`;
+}
+function renderCampaign() {
+  seedContracts();
+  const p = $('campProgress');
+  if (p) {
+    p.textContent = `${campaignDone()} / ${CAMPAIGN_WIN} objectives · 44 total`
+      + (state.campaign.closed ? ' · WON' : '');
+  }
+  const list = $('campKinds');
+  if (list) {
+    list.textContent = '';
+    for (const [kind, name, count, target] of CAMPAIGN_KINDS) {
+      const done = Math.min(count, Math.floor((state.campaign[kind] || 0) / target));
+      const row = document.createElement('div');
+      row.className = 'item';
+      const left = document.createElement('div');
+      const b = document.createElement('b');
+      b.textContent = name;
+      const sm = document.createElement('small');
+      sm.textContent = `${done}/${count} · ${state.campaign[kind] || 0} contribution`;
+      left.append(b, sm);
+      const pct = document.createElement('button');
+      pct.textContent = `${Math.round((done / count) * 100)}%`;
+      pct.disabled = true;
+      row.append(left, pct);
+      list.appendChild(row);
+    }
+  }
+  const rep = $('contractRep');
+  if (rep) rep.textContent = `Reputation ${state.rep.completed} delivered · 3 active max · escrow`;
+  const cl = $('contractList');
+  if (cl) {
+    cl.textContent = '';
+    for (const c of state.contracts) {
+      const row = document.createElement('div');
+      row.className = 'item';
+      const left = document.createElement('div');
+      const b = document.createElement('b');
+      b.textContent = c.title;
+      const sm = document.createElement('small');
+      sm.textContent = `${c.status} · ${c.reward} credits · bond ${c.collateral}`;
+      left.append(b, sm);
+      const btn = document.createElement('button');
+      btn.textContent = c.status === 'open' ? 'ACCEPT' : c.status === 'accepted' ? 'DELIVER' : 'DONE';
+      btn.disabled = c.status === 'delivered';
+      btn.addEventListener('click', () => {
+        const msg = c.status === 'open' ? acceptContract(c.id) : deliverContract(c.id);
+        toast(msg.toUpperCase(), 2800);
+      });
+      row.append(left, btn);
+      cl.appendChild(row);
+    }
+  }
+  const mer = $('merLine');
+  if (mer) {
+    const delta = state.mer.faucets - state.mer.sinks;
+    mer.textContent = `MER · in ${state.mer.faucets} · out ${state.mer.sinks}`
+      + ` · Δ ${delta >= 0 ? '+' : ''}${delta}`;
+  }
+}
+
 // -------------------------------------------------------- voice + panels ---
-const PANELS = ['citizens', 'market', 'diplomacy'];
+const PANELS = ['citizens', 'market', 'diplomacy', 'campaign'];
 function openPanel(id) {
   for (const p of PANELS) {
     const el = $(p);
@@ -4292,6 +4445,7 @@ function openPanel(id) {
   if (id === 'citizens') renderCitizens();
   if (id === 'market') renderMarket();
   if (id === 'diplomacy') renderDiplomacy();
+  if (id === 'campaign') renderCampaign();
 }
 function closePanels() { for (const p of PANELS) { const el = $(p); if (el) el.classList.add('hidden'); } }
 let recognizer = null;
@@ -4365,6 +4519,15 @@ function assistantIntent(text) {
   } else if (/talk|speak|hello/.test(low)) {
     if (nearNPC) { openDialogue(nearNPC); reply = `Talking to ${nearNPC.name}.`; }
     else reply = 'Walk to a neighbour first; I will not move your body.';
+  } else if (/campaign|objective|war/.test(low)) {
+    reply = `Epoch campaign: ${campaignDone()} of ${CAMPAIGN_WIN} objectives (44 total).`;
+    openPanel('campaign');
+  } else if (/contract|job|hire/.test(low)) {
+    reply = 'Contract board open. Rewards are held in escrow; three active contracts per worker.';
+    openPanel('campaign');
+  } else if (/security|tier|border/.test(low)) {
+    const s = shardAt(player.x, player.z);
+    reply = `Shard S${s + 1} is ${SHARD_TIERS[s]} security; payout ${s === 0 ? 80 : s === 3 ? 125 : 100}%.`;
   } else if (/restart|new epoch|reset/.test(low)) {
     if (/confirm/.test(low)) {
       restartEpoch();
@@ -4463,6 +4626,11 @@ window.__nc = {
   get goal() { return state.goal; },
   get epoch() { return { id: state.epoch, cohort: state.epochCohort, day: epochDay(), archive: state.epochArchive.length }; },
   restartEpoch, requestRestart,
+  get campaign() { return { ...state.campaign, done: campaignDone(), needed: CAMPAIGN_WIN }; },
+  get contracts() { return (state.contracts || []).map((c) => ({ ...c })); },
+  get mer() { return { ...state.mer }; },
+  campaignAdd, acceptContract, deliverContract,
+  security() { const s = shardAt(player.x, player.z); return { shard: s + 1, tier: SHARD_TIERS[s] }; },
   shardAt, createCitizen, guideCitizens, planCitizens, deployCitizen, citizenStatus,
   assistantIntent, openPanel, closePanels,
   market() { return BUSINESSES.map((b) => ({ id: b.id, item: b.item, price: marketPrice(b) })); },

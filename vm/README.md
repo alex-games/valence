@@ -156,6 +156,13 @@ python3 tools/compress-filesystem.py vm/runtime/filesystem --html vm/runtime/ind
 
 - **A warm `state/` snapshot from the business VM is not valid for this image.**
   Boot cold (`?boot=true`) until a new snapshot is captured from this guest.
+- **The default starting state is a cold boot captured once.** Run
+  `./vm/coldboot-default.sh` after the image build; it cold-boots the real page
+  and writes `vm/runtime/state/default.bin` plus `default.json` (sha256, bytes,
+  commit, memory). Every later warm boot starts from that state, and every new
+  epoch inherits it; `--register` also appends the checkpoint to `epochs.db`.
+  Never hand-edit `default.bin`: a state whose hash does not match the manifest
+  is refused (`docs/games/save-states.md`).
 - The `bzImage` filename in `index.html` is rewritten by
   `compress-filesystem.py`; do not reuse the business page's kernel name.
 

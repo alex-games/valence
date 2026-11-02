@@ -108,11 +108,22 @@
     <div id="dipList" class="list"></div>
   </aside>
 
+  <aside id="campaign" class="panel hidden" aria-label="Epoch campaign and contracts">
+    <h2><span>EPOCH CAMPAIGN</span><button class="x" data-close="campaign" aria-label="Close">✕</button></h2>
+    <p class="goal" id="campProgress">0 / 30 objectives · 44 total</p>
+    <div id="campKinds" class="list"></div>
+    <h2><span>CONTRACTS</span></h2>
+    <p class="goal" id="contractRep">Reputation 0 · 3 active max</p>
+    <div id="contractList" class="list"></div>
+    <p class="why" id="merLine">MER · no trades yet</p>
+  </aside>
+
   <div id="pad" aria-label="Virtual controller">
     <button data-pad="assist">ASSIST</button>
     <button data-pad="citizens">CITIZENS</button>
     <button data-pad="market">MARKET</button>
     <button data-pad="diplomacy">RELATIONS</button>
+    <button data-pad="campaign">CAMPAIGN</button>
     <button data-pad="map">MAP</button>
     <button data-pad="claim">CLAIM</button>
     <button data-pad="talk">TALK</button>
