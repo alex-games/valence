@@ -115,6 +115,7 @@ docker run \
     -v "$CACHE_DIR/dl:/root/buildroot-${BUILD_ROOT_RELEASE}/dl" \
     -v "$LOCAL_CCACHE_DIR:/root/.buildroot-ccache" \
     -e BR2_DL_DIR="/root/buildroot-${BUILD_ROOT_RELEASE}/dl" \
+    -e CCACHE_CONFIGPATH=/config/ccache.conf \
     "${BUILD_ROOT_TAG}" \
     -c "make -j \$(( \$(nproc) + 1 )) -l \$(( \$(nproc) + 1 )) STATIC=1 oldconfig && FORCE_UNSAFE_CONFIGURE=1 make -j \$(( \$(nproc) + 1 )) -l \$(( \$(nproc) + 1 )) STATIC=1 && python3 /tools/compress-filesystem.py /build/filesystem; rc=\$?; echo '== ccache =='; /root/buildroot-${BUILD_ROOT_RELEASE}/output/host/bin/ccache -s || true; exit \$rc"
 rc=$?
