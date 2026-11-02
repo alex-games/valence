@@ -21,7 +21,10 @@
         <span>FPS <b id="fps">—</b> · <b id="mode">walking</b></span>
         <span>TOKENS <b id="tokens">0 / 8</b></span>
         <span>SATS <b id="sats">0</b></span>
+        <span>CREDITS <b id="credits">3000</b></span>
         <span>GAME DAY <b id="day">—</b></span>
+        <span>EPOCH <b id="epoch">—</b></span>
+        <span>SHARDS <b id="shards">—</b></span>
         <span>ANCHOR <b id="anchor">—</b></span>
         <span>WALLET <b id="wallet">—</b></span>
         <span id="net">OFFLINE · SOLO</span>
@@ -30,6 +33,8 @@
   </header>
 
   <div id="topright">
+    <button class="iconbtn" id="btnAssist" title="Voice assistant" aria-label="Voice assistant">🎙</button>
+    <button class="iconbtn" id="btnCitizens" title="Citizens" aria-label="Citizens">♟</button>
     <button class="iconbtn" id="btnHelp" title="How to play" aria-label="How to play">?</button>
     <button class="iconbtn" id="btnChat" title="Chat" aria-label="Chat">💬</button>
     <button class="iconbtn" id="btnMap" title="Map" aria-label="Map">▦</button>
@@ -61,6 +66,59 @@
     <p id="dialogueText"></p>
     <button id="dialogueNext">Next</button>
   </div>
+
+  <aside id="citizens" class="panel hidden" aria-label="Citizens and AI governor">
+    <h2><span>CITIZENS · AI GOVERNOR</span><button class="x" data-close="citizens" aria-label="Close">✕</button></h2>
+    <p class="goal" id="citGoal">Goal: growth</p>
+    <div id="citList" class="list"></div>
+    <div class="row">
+      <select id="citKind" aria-label="Citizen type">
+        <option value="worker">Worker</option>
+        <option value="settler">Settler</option>
+        <option value="trader">Trader</option>
+        <option value="scholar">Scholar</option>
+        <option value="ranger">Ranger</option>
+        <option value="guard">Guard</option>
+        <option value="diplomat">Diplomat</option>
+        <option value="artisan">Artisan</option>
+      </select>
+      <input id="citName" maxlength="24" placeholder="name" aria-label="Citizen name">
+      <button id="citCreate">Create</button>
+    </div>
+    <div class="row">
+      <input id="citGuide" maxlength="120" placeholder="Tell the AI: grow food, defend, map every shard…" aria-label="Guidance">
+      <button id="citGuideBtn">Guide</button>
+    </div>
+    <div class="row">
+      <button id="citPlan">Plan toil</button>
+      <button id="citMap">Map shards</button>
+    </div>
+    <p class="why" id="citWhy"></p>
+  </aside>
+
+  <aside id="market" class="panel hidden" aria-label="Regional market">
+    <h2><span>REGIONAL MARKET</span><button class="x" data-close="market" aria-label="Close">✕</button></h2>
+    <p class="goal">Game credits · 3% broker · 2% sales tax · no BTC moves here</p>
+    <div id="mktList" class="list"></div>
+  </aside>
+
+  <aside id="diplomacy" class="panel hidden" aria-label="AI relations">
+    <h2><span>AI RELATIONS</span><button class="x" data-close="diplomacy" aria-label="Close">✕</button></h2>
+    <p class="goal">Contact in any shard · 7 game days to cool aggression</p>
+    <div id="dipList" class="list"></div>
+  </aside>
+
+  <div id="pad" aria-label="Virtual controller">
+    <button data-pad="assist">ASSIST</button>
+    <button data-pad="citizens">CITIZENS</button>
+    <button data-pad="market">MARKET</button>
+    <button data-pad="diplomacy">RELATIONS</button>
+    <button data-pad="map">MAP</button>
+    <button data-pad="claim">CLAIM</button>
+    <button data-pad="talk">TALK</button>
+    <button data-pad="epoch">EPOCH</button>
+  </div>
+  <div id="voice" class="hidden">LISTENING…</div>
 
   <div id="touch">
     <div id="stick"><div id="knob"></div></div>

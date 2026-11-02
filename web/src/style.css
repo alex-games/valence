@@ -645,3 +645,118 @@ button.btn:active { transform: translateY(1px); }
 }
 #farm b { color: var(--green); }
 #farm span { color: var(--muted); }
+
+/* --- San Francisco AI base and the free-roam shard map --- */
+.poi.gold { color: #f4c95d; border-color: rgba(244, 201, 93, 0.6); }
+
+/* --- virtual controller: every aspect reachable without a keyboard --- */
+#pad {
+  position: fixed;
+  right: calc(12px + env(safe-area-inset-right));
+  bottom: calc(150px + env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  z-index: 30;
+}
+#pad button {
+  min-width: 66px;
+  padding: 7px 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(12, 18, 24, 0.72);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+#pad button:hover, #pad button.on { border-color: var(--green); color: var(--green); }
+
+#voice {
+  position: fixed;
+  left: 50%;
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border: 1px solid var(--green);
+  border-radius: 999px;
+  background: rgba(10, 16, 20, 0.85);
+  color: var(--green);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  z-index: 45;
+}
+
+/* --- shared side panels --- */
+.panel {
+  position: fixed;
+  top: 62px;
+  right: calc(10px + env(safe-area-inset-right));
+  width: min(360px, calc(100vw - 20px));
+  max-height: min(72vh, 560px);
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(10, 16, 20, 0.93);
+  color: var(--text);
+  z-index: 40;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+.panel h2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 0 8px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--green);
+}
+.panel h2 .x {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.panel .goal { margin: 0 0 8px; color: var(--muted); font-size: 10px; }
+.panel .why { min-height: 24px; color: var(--muted); font-size: 9px; line-height: 1.4; }
+.panel .row { display: flex; gap: 5px; margin: 6px 0; }
+.panel .row > * { flex: 1; min-width: 0; }
+.panel input, .panel select, .panel .row button {
+  padding: 6px 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 10px;
+}
+.panel .row button { flex: 0 0 auto; cursor: pointer; }
+.panel .row button:hover { border-color: var(--green); color: var(--green); }
+.panel .list .item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 10px;
+}
+.panel .list .item small { display: block; color: var(--muted); font-size: 9px; }
+.panel .list .item button {
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 9px;
+  cursor: pointer;
+}
+.panel .list .item button:hover { border-color: var(--green); color: var(--green); }
+@media (max-width: 640px) {
+  #pad { grid-template-columns: 1fr; bottom: calc(190px + env(safe-area-inset-bottom)); }
+  #pad button { min-width: 78px; font-size: 8px; }
+}

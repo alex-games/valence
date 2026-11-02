@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
@@ -33,10 +33,18 @@ const README: &[u8] = include_bytes!("../../web/dist/README.txt");
 const CREDITS: &[u8] = include_bytes!("../../web/dist/CREDITS.txt");
 const BIRDS: &[u8] = include_bytes!("../../web/assets/audio/birds.mp3");
 
-const ASSET_VERSION: &str = "torrance-2";
+const ASSET_VERSION: &str = "torrance-3";
 const WORLD_SLUG: &str = "torrance";
 const MAX_BODY: usize = 64 * 1024;
 const WS_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+
+// ---------------------------------------------------------- play shards -----
+// The 96×96 level is a 2×2 grid of four play shards, matching the four
+// consistent-hash ordering lanes. **A shard is a place, not a fence.** An NPC's
+// events stay ordered in its own `npc:<id>` lane, but the entity may walk into
+// any play shard, and it maps every shard it enters into `game_npc_roam`.
+const PLAY_SHARDS: usize = 4;
+const SHARD_HALF: f32 = 48.0;
 
 // ------------------------------------------------------------------- store ---
 struct Store {
@@ -135,6 +143,12 @@ impl Store {
                    player_id text NOT NULL, seq bigint NOT NULL,
                    leaf text NOT NULL, event text NOT NULL, at bigint NOT NULL,
                    PRIMARY KEY (player_id, seq)
+                 );
+                 CREATE TABLE IF NOT EXISTS game_npc_roam (
+                   world text NOT NULL, npc text NOT NULL, shard int NOT NULL,
+                   first_seen bigint NOT NULL, last_seen bigint NOT NULL,
+                   visits int NOT NULL DEFAULT 1,
+                   PRIMARY KEY (world, npc, shard)
                  );",
             )?;
 
@@ -274,6 +288,41 @@ impl Store {
         })
     }
 
+    /// Persist one play-shard visit. Discovery is append-only at the shard
+    /// level: the first sighting and the last sighting are both kept.
+    fn save_npc_roam(&self, npc: &str, shard: usize, at: i64) {
+        self.with(|c| {
+            c.execute(
+                "INSERT INTO game_npc_roam(world,npc,shard,first_seen,last_seen,visits)
+                 VALUES($1,$2,$3,$4,$4,1)
+                 ON CONFLICT(world,npc,shard) DO UPDATE SET last_seen=EXCLUDED.last_seen,
+                   visits=game_npc_roam.visits+1",
+                &[&WORLD_SLUG, &npc, &(shard as i32), &at],
+            )?;
+            Ok(())
+        });
+    }
+
+    /// Load the shard bitmask each NPC has already mapped.
+    fn npc_roam(&self) -> HashMap<String, u8> {
+        let mut out: HashMap<String, u8> = HashMap::new();
+        self.with(|c| {
+            let rows = c.query(
+                "SELECT npc, shard FROM game_npc_roam WHERE world=$1",
+                &[&WORLD_SLUG],
+            )?;
+            for row in rows {
+                let npc: String = row.get(0);
+                let shard: i32 = row.get(1);
+                if (0..PLAY_SHARDS as i32).contains(&shard) {
+                    *out.entry(npc).or_insert(0u8) |= 1 << shard;
+                }
+            }
+            Ok(())
+        });
+        out
+    }
+
     fn save_side(&self, shard: i32, height: i64, hash: &str, parent: &str, root: &str, edits: i32, at: i64) {
         self.with(|c| {
             c.execute(
@@ -405,6 +454,7 @@ struct ScoreRow {
 enum DbJob {
     Edit { x: i32, y: i32, z: i32, block: i32, by: String },
     Score { pid: String, name: String, quests: i32, tokens: i32 },
+    NpcRoam { npc: String, shard: usize, at: i64 },
 }
 
 // ---------------------------------------------------- 2× rings + hash shards --
@@ -508,6 +558,25 @@ fn fnv1a(s: &str) -> u64 {
     h
 }
 
+fn shard_at(x: f32, z: f32) -> usize {
+    let sx = usize::from(x >= SHARD_HALF);
+    let sz = usize::from(z >= SHARD_HALF);
+    (sz * 2 + sx).min(PLAY_SHARDS - 1)
+}
+
+fn shard_center(shard: usize) -> (f32, f32) {
+    let sx = (shard & 1) as f32;
+    let sz = ((shard >> 1) & 1) as f32;
+    (SHARD_HALF * 0.5 + sx * SHARD_HALF, SHARD_HALF * 0.5 + sz * SHARD_HALF)
+}
+
+fn epoch_secs() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
 struct HashRing {
     vnodes: Vec<(u64, usize)>,
     shards: usize,
@@ -576,6 +645,9 @@ struct NpcState {
     name: String,
     sprite: String,
     home: (f32, f32),
+    shard: usize,
+    seen: u8,
+    target_shard: usize,
     x: f32,
     y: f32,
     z: f32,
@@ -606,11 +678,18 @@ impl NpcState {
         let dz = self.tz - self.z;
         let d = (dx * dx + dz * dz).sqrt();
         if d < 0.10 {
+            self.shard = shard_at(self.x, self.z);
+            self.seen |= 1 << self.shard;
+            // No geofence: pick the next play shard round-robin so every shard
+            // is entered and mapped, then a random point inside it. The NPC is
+            // not pulled back to `home`; `home` is only its spawn.
+            self.target_shard = (self.target_shard + 1) % PLAY_SHARDS;
+            let (cx, cz) = shard_center(self.target_shard);
             let a = self.rand() * std::f32::consts::TAU;
-            let r = 0.15 + self.rand() * 0.65;
-            self.tx = clamp_f(self.home.0 + a.cos() * r, 2.0, 94.0);
-            self.tz = clamp_f(self.home.1 + a.sin() * r, 2.0, 94.0);
-            let pause = 1200 + (self.rand() * 3200.0) as u64;
+            let r = 4.0 + self.rand() * 16.0;
+            self.tx = clamp_f(cx + a.cos() * r, 2.0, 94.0);
+            self.tz = clamp_f(cz + a.sin() * r, 2.0, 94.0);
+            let pause = 500 + (self.rand() * 1500.0) as u64;
             self.pause_until = now + Duration::from_millis(pause);
             return;
         }
@@ -618,10 +697,15 @@ impl NpcState {
         self.x += dx / d * step;
         self.z += dz / d * step;
         self.yaw = dx.atan2(-dz);
+        let here = shard_at(self.x, self.z);
+        if here != self.shard {
+            self.shard = here;
+            self.seen |= 1 << here;
+        }
     }
 }
 
-fn load_npcs() -> Vec<NpcState> {
+fn load_npcs(roam: &HashMap<String, u8>) -> Vec<NpcState> {
     let value: Value = serde_json::from_str(WORLD).unwrap_or_else(|_| json!({}));
     let arr = value.get("npcs").and_then(|v| v.as_array()).cloned().unwrap_or_default();
     arr.iter()
@@ -638,14 +722,18 @@ fn load_npcs() -> Vec<NpcState> {
                     a.get(1).and_then(|v| v.as_f64()).unwrap_or(2.0) as f32,
                 )
             }).unwrap_or((1.5, 2.0));
+            let shard = shard_at(x, z);
             Some(NpcState {
                 id: id.clone(),
                 name,
                 sprite,
                 home: (x, z),
+                shard,
+                seen: roam.get(&id).copied().unwrap_or(0) | (1 << shard),
+                target_shard: shard,
                 x, y, z, tx: x, tz: z, yaw: 0.0,
                 size,
-                speed: 0.55,
+                speed: 1.35,
                 pause_until: std::time::Instant::now() + Duration::from_millis((fnv1a(&id) % 3000) as u64),
                 rng: fnv1a(&id) | 1,
             })
@@ -657,7 +745,10 @@ fn npc_json(n: &NpcState) -> Value {
     json!({
         "id": n.id, "name": n.name, "sprite": n.sprite,
         "x": n.x, "y": n.y, "z": n.z, "yaw": n.yaw,
-        "size": [n.size.0, n.size.1]
+        "size": [n.size.0, n.size.1],
+        "home": [n.home.0, n.home.1],
+        "shard": n.shard, "shards": n.seen, "shards_seen": n.seen.count_ones(),
+        "shards_total": PLAY_SHARDS, "geofence": false
     })
 }
 
@@ -737,11 +828,25 @@ fn player_actor(hub: Arc<Hub>, mut p: PlayerState, rx: mpsc::Receiver<ActorMsg>,
     }
 }
 
-fn npc_actor(mut n: NpcState, rx: mpsc::Receiver<ActorMsg>, snapshot: Arc<Mutex<Value>>) {
+fn npc_actor(
+    mut n: NpcState,
+    rx: mpsc::Receiver<ActorMsg>,
+    snapshot: Arc<Mutex<Value>>,
+    db_tx: Sender<DbJob>,
+) {
     publish(&snapshot, npc_json(&n));
+    let mut shard = n.shard;
     while let Ok(msg) = rx.recv() {
         if let ActorMsg::Npc(NpcMsg::Tick { dt }) = msg {
             n.tick(dt);
+            if n.shard != shard {
+                shard = n.shard;
+                let _ = db_tx.send(DbJob::NpcRoam {
+                    npc: n.id.clone(),
+                    shard,
+                    at: epoch_secs(),
+                });
+            }
             publish(&snapshot, npc_json(&n));
         }
     }
@@ -1442,6 +1547,8 @@ fn db_url() -> String {
 fn db_writer(rx: mpsc::Receiver<DbJob>, store: Arc<Store>) {
     let mut edits: HashMap<(i32, i32, i32), (i32, String)> = HashMap::new();
     let mut scores: HashMap<String, (String, i32, i32)> = HashMap::new();
+    let mut roam: HashMap<(String, usize), i64> = HashMap::new();
+    let mut last_flush = std::time::Instant::now();
     loop {
         match rx.recv_timeout(Duration::from_millis(450)) {
             Ok(DbJob::Edit { x, y, z, block, by }) => {
@@ -1450,15 +1557,25 @@ fn db_writer(rx: mpsc::Receiver<DbJob>, store: Arc<Store>) {
             Ok(DbJob::Score { pid, name, quests, tokens }) => {
                 scores.insert(pid, (name, quests, tokens));
             }
+            Ok(DbJob::NpcRoam { npc, shard, at }) => {
+                roam.insert((npc, shard), at);
+            }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => break,
         }
-        if edits.len() >= 40 || scores.len() >= 40 {
+        // A slow NPC changes shard rarely; flush on a timer as well as on size,
+        // otherwise a discovery could sit in memory for the whole session.
+        let due = last_flush.elapsed() >= Duration::from_secs(2);
+        if edits.len() >= 40 || scores.len() >= 40 || roam.len() >= 40 || due {
+            last_flush = std::time::Instant::now();
             for ((x, y, z), (block, by)) in edits.drain() {
                 store.save_edit(x, y, z, block, &by);
             }
             for (pid, (name, quests, tokens)) in scores.drain() {
                 store.save_score(&pid, &name, quests, tokens);
+            }
+            for ((npc, shard), at) in roam.drain() {
+                store.save_npc_roam(&npc, shard, at);
             }
         }
     }
@@ -1467,6 +1584,9 @@ fn db_writer(rx: mpsc::Receiver<DbJob>, store: Arc<Store>) {
     }
     for (pid, (name, quests, tokens)) in scores.drain() {
         store.save_score(&pid, &name, quests, tokens);
+    }
+    for ((npc, shard), at) in roam.drain() {
+        store.save_npc_roam(&npc, shard, at);
     }
 }
 
@@ -1517,13 +1637,19 @@ fn main() {
         .into_iter()
         .map(|s| (s.pid.clone(), s))
         .collect();
-    eprintln!("[db] loaded {} edits, {} scores", edits.len(), scores.len());
+    let roam = if ready { store.npc_roam() } else { HashMap::new() };
+    eprintln!(
+        "[db] loaded {} edits, {} scores, {} roaming npc(s)",
+        edits.len(),
+        scores.len(),
+        roam.len()
+    );
 
     let (db_tx, db_rx) = mpsc::channel();
     let writer_store = store.clone();
     thread::spawn(move || db_writer(db_rx, writer_store));
 
-    const SHARDS: usize = 4;
+    const SHARDS: usize = PLAY_SHARDS;
     let shards = Arc::new(Shards::new(SHARDS, 4096));
     let hub = Arc::new(Hub {
         next_id: AtomicU64::new(0),
@@ -1539,21 +1665,23 @@ fn main() {
         started: std::time::Instant::now(),
     });
 
-    // One thread per NPC. The consistent hash places each NPC on a shard; the
-    // shard consumer only routes its ticks to this actor's mailbox.
-    for npc in load_npcs() {
+    // One thread per NPC. The consistent hash gives each NPC an *ordering lane*
+    // (`npc:<id>`) so its ticks stay serialised; it does not fence the entity
+    // into that shard. The actor roams every play shard and maps each one.
+    for npc in load_npcs(&roam) {
         let npc_id = npc.id.clone();
         let key = format!("npc:{npc_id}");
         let shard = shards.npc_shard(&npc_id);
         let snapshot = Arc::new(Mutex::new(npc_json(&npc)));
         let (tx, rx) = mpsc::channel();
         let actor_snapshot = snapshot.clone();
+        let actor_db = hub.db_tx.clone();
         thread::Builder::new()
             .name(key.clone())
-            .spawn(move || npc_actor(npc, rx, actor_snapshot))
+            .spawn(move || npc_actor(npc, rx, actor_snapshot, actor_db))
             .ok();
         hub.register_actor(key, tx, snapshot, ActorKind::Npc);
-        eprintln!("[actor] npc {npc_id} -> shard {shard}");
+        eprintln!("[actor] npc {npc_id} -> lane {shard} (free roam, {PLAY_SHARDS} shards)");
     }
 
     // One consumer per shard. It never mutates state; it swaps the double ring

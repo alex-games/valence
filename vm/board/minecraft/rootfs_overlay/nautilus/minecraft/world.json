@@ -38,6 +38,13 @@
   ],
   "pois": [
     {
+      "name": "SAN FRANCISCO · AI BASE",
+      "x": 48,
+      "y": 16,
+      "z": 3,
+      "cls": "gold"
+    },
+    {
       "name": "SPAWN PLAZA",
       "x": 48,
       "y": 15,
@@ -294,6 +301,24 @@
         "*rustle*",
         "Rusty looks at you with the calm of a creature with no quests.",
         "*sniff sniff*"
+      ]
+    },
+    {
+      "id": "sentinel",
+      "name": "Sentinel",
+      "role": "AI base sentinel",
+      "sprite": "ranger",
+      "x": 50.5,
+      "y": 9,
+      "z": 5.5,
+      "size": [
+        1.6,
+        2.1
+      ],
+      "lines": [
+        "This is the San Francisco gate. The AI treasury starts here.",
+        "Thirty percent is held in the vault; the rest is patrolled, not sealed.",
+        "Ask the Warden about the vault. Ask me about the road north."
       ]
     }
   ],

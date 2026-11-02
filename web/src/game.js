@@ -1377,6 +1377,7 @@ const NPCS = (Array.isArray(WORLD.npcs) ? WORLD.npcs : FALLBACK_WORLD.npcs)
     yaw: 0,
     size: Array.isArray(n.size) ? n.size : [1.5, 2.0],
     lines: Array.isArray(n.lines) && n.lines.length ? n.lines : ['Hello, neighbour.'],
+    shard: 0, seen: 1, seenCount: 1,
     bob: Math.random() * 6.28
   }));
 const NPC_LABELS = NPCS.map((n) => {
@@ -1402,6 +1403,17 @@ const state = {
   tokens: [],
   inventory: Object.create(null),
   sats: 0,
+  credits: 3000,
+  shards: 0,
+  citizens: [],
+  relations: {},
+  goal: 'growth',
+  guidance: '',
+  epoch: 1,
+  epochStart: Date.now(),
+  epochCohort: 1,
+  cohortStart: Date.now(),
+  epochArchive: [],
   farmDay: '',
   farmed: [],
   placed: 0,
@@ -1422,6 +1434,10 @@ function saveNow() {
     store.setItem(SAVE_KEY, JSON.stringify({
       v: 1, p: [player.x, player.y, player.z], yaw: player.yaw, pitch: player.pitch,
       q: state.quests, tokens: state.tokens, inventory: state.inventory, sats: state.sats,
+      credits: state.credits, shards: state.shards, citizens: state.citizens,
+      relations: state.relations, goal: state.goal, guidance: state.guidance,
+      epoch: state.epoch, epochStart: state.epochStart, epochCohort: state.epochCohort,
+      cohortStart: state.cohortStart, epochArchive: state.epochArchive,
       farmDay: state.farmDay, farmed: state.farmed, placed: state.placed, broken: state.broken,
       started: state.started, finished: state.finished, edits: e
     }));
@@ -1443,6 +1459,17 @@ function loadSave() {
     state.tokens = Array.isArray(s.tokens) ? s.tokens.filter((x) => typeof x === 'string') : [];
     state.inventory = s.inventory && typeof s.inventory === 'object' ? s.inventory : Object.create(null);
     state.sats = typeof s.sats === 'number' ? s.sats : 0;
+    state.credits = typeof s.credits === 'number' ? s.credits : 3000;
+    state.shards = typeof s.shards === 'number' ? s.shards : 0;
+    state.citizens = Array.isArray(s.citizens) ? s.citizens.filter((c) => c && c.id && c.kind) : [];
+    state.relations = s.relations && typeof s.relations === 'object' ? s.relations : {};
+    state.goal = typeof s.goal === 'string' ? s.goal : 'growth';
+    state.guidance = typeof s.guidance === 'string' ? s.guidance : '';
+    state.epoch = typeof s.epoch === 'number' ? s.epoch : 1;
+    state.epochStart = typeof s.epochStart === 'number' ? s.epochStart : Date.now();
+    state.epochCohort = typeof s.epochCohort === 'number' ? s.epochCohort : 1;
+    state.cohortStart = typeof s.cohortStart === 'number' ? s.cohortStart : Date.now();
+    state.epochArchive = Array.isArray(s.epochArchive) ? s.epochArchive : [];
     state.farmDay = typeof s.farmDay === 'number' ? s.farmDay : Number(s.farmDay) || 0;
     state.farmed = Array.isArray(s.farmed) ? s.farmed.filter((x) => typeof x === 'string') : [];
     state.placed = s.placed | 0; state.broken = s.broken | 0;
@@ -1573,6 +1600,55 @@ function ensureFarmDay() {
 }
 function farmDistance(b) { return Math.hypot(player.x - b.x, player.z - b.z); }
 function renderSats() { if (satsEl) satsEl.textContent = String(state.sats); }
+function renderCredits() { const el = $('credits'); if (el) el.textContent = String(state.credits); }
+function countBits(n) { let c = 0; while (n) { c += n & 1; n >>>= 1; } return c; }
+function renderShards() {
+  const el = $('shards');
+  if (!el) return;
+  const here = shardAt(player.x, player.z);
+  state.shards |= 1 << here;
+  el.textContent = `${countBits(state.shards)}/${SHARD_COUNT} · S${here + 1}`;
+}
+function epochDay() {
+  return Math.max(1, Math.floor((Date.now() - state.epochStart) / GAME_DAY_MS) + 1);
+}
+let lastEpochLabel = '';
+function renderEpoch() {
+  const el = $('epoch');
+  if (!el) return;
+  const label = `${state.epoch} · D${epochDay()} · C${state.epochCohort}`;
+  if (label !== lastEpochLabel) { lastEpochLabel = label; el.textContent = label; }
+}
+let restartArmedUntil = 0;
+function requestRestart() {
+  if (Date.now() < restartArmedUntil) { restartEpoch(); return; }
+  restartArmedUntil = Date.now() + 8000;
+  toast('RESTART = NEW EPOCH · NOTHING CARRIES OVER · TAP AGAIN TO CONFIRM', 4200);
+}
+function restartEpoch() {
+  const now = Date.now();
+  if (!Array.isArray(state.epochArchive)) state.epochArchive = [];
+  state.epochArchive.push({
+    epoch: state.epoch, cohort: state.epochCohort, day: epochDay(),
+    sats: state.sats, credits: state.credits, citizens: state.citizens.length, at: now
+  });
+  // The new epoch shares the cohort while its 100-game-day window is open;
+  // past that it starts the next cohort.
+  if (now - state.cohortStart > 100 * GAME_DAY_MS) {
+    state.epochCohort += 1;
+    state.cohortStart = now;
+  }
+  state.epoch += 1;
+  state.epochStart = now;
+  restartArmedUntil = 0;
+  resetWorld();
+  renderEpoch(); renderCredits(); renderCitizens(); saveNow();
+  mqttPublish('epochs/restart', {
+    epoch: state.epoch, cohort: state.epochCohort, at: now,
+    pid: NET.pid || 'solo', carry: 'none'
+  }, 1, false);
+  toast(`EPOCH ${state.epoch} · COHORT ${state.epochCohort} · FRESH TIMELINE`, 3600);
+}
 function renderDay() {
   const el = document.getElementById('day');
   if (!el) return;
@@ -1701,7 +1777,9 @@ async function handlePhoto(file) {
   state.farmed.push(b.id);
   state.inventory[b.item] = (state.inventory[b.item] || 0) + b.qty;
   state.sats += b.sats;
+  state.credits += 150;
   renderSats();
+  renderCredits();
   saveSoon();
   beep(720, 0.08, 'triangle', 0.02);
   setTimeout(() => beep(1080, 0.12, 'triangle', 0.018), 90);
@@ -1715,7 +1793,9 @@ async function handlePhoto(file) {
 function showDialogueLine() {
   if (!dialogueNPC) return;
   const line = dialogueNPC.lines[Math.min(dialogueLine, dialogueNPC.lines.length - 1)];
-  dialogueNameEl.textContent = dialogueNPC.name.toUpperCase() + (dialogueNPC.role ? ' · ' + dialogueNPC.role.toUpperCase() : '');
+  dialogueNameEl.textContent = dialogueNPC.name.toUpperCase()
+    + (dialogueNPC.role ? ' · ' + dialogueNPC.role.toUpperCase() : '')
+    + ` · S${(dialogueNPC.shard | 0) + 1} · MAPPED ${dialogueNPC.seenCount | 0}/4`;
   dialogueTextEl.textContent = line;
   dialogueNextEl.textContent = dialogueLine >= dialogueNPC.lines.length - 1 ? 'Close' : 'Next';
 }
@@ -2027,6 +2107,13 @@ function applyServerNpc(s) {
   if (typeof s.y === 'number') { n.ty = s.y; if (Math.abs(n.y - s.y) > 8) n.y = s.y; }
   if (typeof s.z === 'number') { n.tz = s.z; if (Math.abs(n.z - s.z) > 8) n.z = s.z; }
   if (typeof s.yaw === 'number') n.yaw = s.yaw;
+  if (typeof s.shard === 'number') n.shard = s.shard;
+  if (typeof s.shards === 'number') n.seen = s.shards;
+  if (typeof s.shards_seen === 'number') n.seenCount = s.shards_seen;
+  const i = NPCS.indexOf(n);
+  if (i >= 0 && NPC_LABELS[i]) {
+    NPC_LABELS[i].textContent = `${n.name.toUpperCase()} · S${(n.shard | 0) + 1} · ${n.seenCount | 0}/4`;
+  }
 }
 let mapQueue = [];
 function applyMapState(obj) {
@@ -2513,6 +2600,8 @@ function frame(now) {
     player.inWater = false;
     coordsEl.textContent = `${player.x.toFixed(0)} ${player.y.toFixed(0)} ${player.z.toFixed(0)}`;
   }
+  renderShards();
+  renderEpoch();
 
   netDrain(handleTopicMessage);
   drainMapQueue();
@@ -2724,6 +2813,12 @@ function resetWorld() {
   state.tokens = [];
   state.inventory = Object.create(null);
   state.sats = 0;
+  state.credits = 3000;
+  state.shards = 0;
+  state.citizens = [];
+  state.relations = {};
+  state.goal = 'growth';
+  state.guidance = '';
   state.farmDay = '';
   state.farmed = [];
   state.placed = 0; state.broken = 0; state.started = 0; state.finished = false;
@@ -2775,6 +2870,376 @@ initUI();
 resize();
 requestAnimationFrame(frame);
 
+// ------------------------------------------------------- free-roam shards ---
+// Four play shards on a 2×2 grid. NPCs are not fenced to one: the server walks
+// them across all four and persists each visit; the HUD shows the player's own
+// mapped shards. This mirrors the VM's `game_npc_roam` table.
+const SHARD_COUNT = 4;
+const SHARD_SPAN = 48;
+function shardAt(x, z) {
+  return (x >= SHARD_SPAN ? 1 : 0) + (z >= SHARD_SPAN ? 2 : 0);
+}
+function shardCenter(s) {
+  const k = ((s | 0) % SHARD_COUNT + SHARD_COUNT) % SHARD_COUNT;
+  return [SHARD_SPAN * 0.5 + (k & 1) * SHARD_SPAN, SHARD_SPAN * 0.5 + ((k >> 1) & 1) * SHARD_SPAN];
+}
+
+// ------------------------------------------------- citizens · AI governor ---
+// Costs are game credits, never sats and never BTC. The VM/CC is authoritative;
+// this panel is the direct-controller mirror with the same type catalogue.
+const CITIZEN_TYPES = {
+  settler: { name: 'Settler', cost: 1200, toils: ['settle', 'build', 'scout'], blurb: 'Founds an outpost and claims a POI.' },
+  worker: { name: 'Worker', cost: 600, toils: ['farm', 'build', 'mine', 'haul'], blurb: 'Grows food, builds, mines and hauls.' },
+  trader: { name: 'Trader', cost: 900, toils: ['trade', 'haul', 'broker'], blurb: 'Works a regional order book.' },
+  scholar: { name: 'Scholar', cost: 1000, toils: ['research', 'teach', 'culture'], blurb: 'Advances the technology tree.' },
+  ranger: { name: 'Ranger', cost: 700, toils: ['scout', 'map', 'patrol'], blurb: 'Explores and maps every shard.' },
+  guard: { name: 'Guard', cost: 800, toils: ['guard', 'patrol', 'escort'], blurb: 'Defends the vault or a hauler.' },
+  diplomat: { name: 'Diplomat', cost: 1100, toils: ['contact', 'treaty', 'trade'], blurb: 'Opens contact and raises standing.' },
+  artisan: { name: 'Artisan', cost: 850, toils: ['craft', 'culture', 'build'], blurb: 'Crafts goods and raises culture.' }
+};
+const GOAL_WORDS = [
+  ['food', ['food', 'farm', 'harvest', 'wheat', 'carrot']],
+  ['defence', ['defend', 'defence', 'defense', 'guard', 'protect', 'patrol']],
+  ['gold', ['gold', 'credit', 'money', 'profit', 'trade', 'sell']],
+  ['science', ['science', 'research', 'tech', 'learn']],
+  ['culture', ['culture', 'art', 'craft']],
+  ['map', ['map', 'explore', 'scout', 'shard', 'fog']],
+  ['diplomacy', ['diplomacy', 'diplomat', 'treaty', 'faction', 'standing']],
+  ['production', ['build', 'production', 'mine', 'structure']],
+  ['growth', ['settle', 'outpost', 'expand']]
+];
+const GOAL_TOILS = {
+  food: ['farm', 'haul'], defence: ['guard', 'patrol', 'escort'],
+  gold: ['trade', 'broker', 'haul'], science: ['research', 'teach'],
+  culture: ['culture', 'craft'], map: ['scout', 'map', 'patrol'],
+  diplomacy: ['contact', 'treaty', 'trade'], production: ['build', 'mine', 'craft'],
+  growth: ['settle', 'build', 'farm']
+};
+function inferGoal(text) {
+  const low = String(text || '').toLowerCase();
+  const found = [];
+  for (const [kind, words] of GOAL_WORDS) {
+    for (const w of words) {
+      const at = low.indexOf(w);
+      if (at >= 0) { found.push([at, kind]); break; }
+    }
+  }
+  found.sort((a, b) => a[0] - b[0]);
+  return found.length ? found[0][1] : 'growth';
+}
+let lastPlanReason = '';
+function citizenDayCount() {
+  return state.citizens.filter((c) => c.createdDay === gameDay()).length;
+}
+function createCitizen(kind, name) {
+  const t = CITIZEN_TYPES[kind];
+  if (!t) return 'Unknown citizen type.';
+  if (citizenDayCount() >= 3) return 'Three citizens per game day is the cap.';
+  if (state.credits < t.cost) return `${t.name} costs ${t.cost} credits; you have ${state.credits}.`;
+  state.credits -= t.cost;
+  const c = {
+    id: 'c' + Date.now() + ':' + state.citizens.length,
+    kind, name: (name || t.name).slice(0, 24), level: 1, xp: 0,
+    shard: shardAt(player.x, player.z), toil: 'idle', goal: state.goal,
+    createdDay: gameDay()
+  };
+  state.citizens.push(c);
+  renderCredits(); renderCitizens(); saveSoon();
+  beep(660, 0.08, 'triangle', 0.02);
+  mqttPublish('citizens/create', { id: c.id, kind, name: c.name, pid: NET.pid || 'solo' }, 1, false);
+  return `${c.name} the ${t.name} created for ${t.cost} credits.`;
+}
+function guideCitizens(text) {
+  const goal = inferGoal(text);
+  state.goal = goal;
+  state.guidance = String(text || '').slice(0, 200);
+  renderCitizens(); saveSoon();
+  mqttPublish('citizens/guide', { text: state.guidance, goal, pid: NET.pid || 'solo' }, 1, false);
+  return `Goal set to ${goal}. I will assign toil and shards from that.`;
+}
+function planCitizens() {
+  if (!state.citizens.length) return 'No citizens yet. Create one first.';
+  const wanted = (GOAL_TOILS[state.goal] || GOAL_TOILS.growth);
+  const rows = [];
+  state.citizens.forEach((c, i) => {
+    const t = CITIZEN_TYPES[c.kind] || CITIZEN_TYPES.worker;
+    const allowed = t.toils.filter((x) => wanted.includes(x));
+    c.toil = allowed.length ? allowed[0] : t.toils[0];
+    c.shard = state.goal === 'map' ? (gameDay() + i) % SHARD_COUNT : (i + 1) % SHARD_COUNT;
+    c.goal = state.goal;
+    c.reason = `goal=${state.goal}; ${c.kind} affinity=${t.toils[0]}; toil=${c.toil}; shard S${c.shard + 1}`;
+    rows.push(c.reason);
+  });
+  lastPlanReason = rows[0] || '';
+  renderCitizens(); saveSoon();
+  mqttPublish('citizens/plan', { goal: state.goal, pid: NET.pid || 'solo',
+    plan: state.citizens.map((c) => ({ id: c.id, toil: c.toil, shard: c.shard })) }, 1, false);
+  return `Planned toil for ${state.citizens.length} citizen${state.citizens.length === 1 ? '' : 's'} on goal ${state.goal}.`;
+}
+function deployCitizen(id, shard) {
+  const c = state.citizens.find((x) => x.id === id);
+  if (!c) return 'No such citizen.';
+  const s = ((shard | 0) % SHARD_COUNT + SHARD_COUNT) % SHARD_COUNT;
+  c.shard = s;
+  c.status = 'deployed';
+  renderCitizens(); saveSoon();
+  mqttPublish('citizens/deploy', { id, shard: s, pid: NET.pid || 'solo' }, 1, false);
+  return `${c.name} deployed to S${s + 1}. Every shard is reachable.`;
+}
+function citizenStatus() {
+  if (!state.citizens.length) return 'No citizens yet. Say "create a worker".';
+  return state.citizens.map((c) => `${c.name} the ${c.kind} is ${c.toil || 'idle'} on S${c.shard + 1}`).join('; ');
+}
+function renderCitizens() {
+  const list = $('citList');
+  if (!list) return;
+  const goalEl = $('citGoal');
+  if (goalEl) goalEl.textContent = `Goal: ${state.goal}${state.guidance ? ' · ' + state.guidance : ''}`;
+  const why = $('citWhy');
+  if (why) why.textContent = lastPlanReason || 'The AI assigns toil from your goal; the walk and the photo stay yours.';
+  list.textContent = '';
+  for (const c of state.citizens) {
+    const row = document.createElement('div');
+    row.className = 'item';
+    const left = document.createElement('div');
+    const b = document.createElement('b');
+    b.textContent = c.name;
+    const small = document.createElement('small');
+    const t = CITIZEN_TYPES[c.kind] || CITIZEN_TYPES.worker;
+    small.textContent = `${t.name} · L${c.level} · ${c.toil || 'idle'} · S${c.shard + 1}`;
+    left.append(b, small);
+    const btn = document.createElement('button');
+    btn.textContent = 'DEPLOY';
+    btn.addEventListener('click', () => { toast(deployCitizen(c.id, (c.shard + 1) % SHARD_COUNT).toUpperCase(), 2400); });
+    row.append(left, btn);
+    list.appendChild(row);
+  }
+}
+
+// ------------------------------------------------------------- market UI ---
+function marketPrice(b) { return Math.max(6, Math.round((b.sats || 60) / 8)); }
+function renderMarket() {
+  const list = $('mktList');
+  if (!list) return;
+  list.textContent = '';
+  for (const b of BUSINESSES) {
+    const price = marketPrice(b);
+    const row = document.createElement('div');
+    row.className = 'item';
+    const left = document.createElement('div');
+    const name = document.createElement('b');
+    name.textContent = b.item.toUpperCase();
+    const small = document.createElement('small');
+    small.textContent = `${b.name} · sell ${Math.round(price * 0.95)} cr · you have ${state.inventory[b.item] || 0}`;
+    left.append(name, small);
+    const buy = document.createElement('button');
+    buy.textContent = `BUY ${price}`;
+    buy.addEventListener('click', () => {
+      if (state.credits < price) { toast('NOT ENOUGH CREDITS', 2000); return; }
+      state.credits -= price;
+      state.inventory[b.item] = (state.inventory[b.item] || 0) + 1;
+      renderCredits(); renderMarket(); saveSoon();
+      toast(`BOUGHT 1 ${b.item.toUpperCase()} · ${price} CREDITS`, 2000);
+    });
+    const sell = document.createElement('button');
+    sell.textContent = 'SELL';
+    sell.addEventListener('click', () => {
+      if (!(state.inventory[b.item] > 0)) { toast('NOTHING TO SELL', 1800); return; }
+      state.inventory[b.item] -= 1;
+      state.credits += Math.round(price * 0.95);
+      renderCredits(); renderMarket(); saveSoon();
+      toast(`SOLD 1 ${b.item.toUpperCase()} · 3% BROKER · 2% TAX`, 2200);
+    });
+    row.append(left, buy, sell);
+    list.appendChild(row);
+  }
+}
+
+// --------------------------------------------------------- relations UI ----
+function standingBand(n) {
+  if (n >= 60) return 'allied';
+  if (n >= 25) return 'friendly';
+  if (n >= -25) return 'neutral';
+  return 'hostile';
+}
+function renderDiplomacy() {
+  const list = $('dipList');
+  if (!list) return;
+  list.textContent = '';
+  for (const n of NPCS) {
+    const standing = Number.isFinite(state.relations[n.id]) ? state.relations[n.id] : 0;
+    const row = document.createElement('div');
+    row.className = 'item';
+    const left = document.createElement('div');
+    const name = document.createElement('b');
+    name.textContent = n.name;
+    const small = document.createElement('small');
+    small.textContent = `${standingBand(standing)} · ${standing} · S${(n.shard | 0) + 1} · mapped ${n.seenCount | 0}/4`;
+    left.append(name, small);
+    const gift = document.createElement('button');
+    gift.textContent = 'GIFT 50';
+    gift.addEventListener('click', () => {
+      if (state.credits < 50) { toast('NOT ENOUGH CREDITS', 1800); return; }
+      state.credits -= 50;
+      state.relations[n.id] = Math.min(100, standing + 5);
+      renderCredits(); renderDiplomacy(); saveSoon();
+      toast(`${n.name.toUpperCase()} · ${standingBand(state.relations[n.id]).toUpperCase()}`, 2000);
+    });
+    row.append(left, gift);
+    list.appendChild(row);
+  }
+}
+
+// -------------------------------------------------------- voice + panels ---
+const PANELS = ['citizens', 'market', 'diplomacy'];
+function openPanel(id) {
+  for (const p of PANELS) {
+    const el = $(p);
+    if (el) el.classList.toggle('hidden', p !== id);
+  }
+  for (const btn of document.querySelectorAll('#pad button')) {
+    btn.classList.toggle('on', btn.dataset.pad === id);
+  }
+  if (id === 'citizens') renderCitizens();
+  if (id === 'market') renderMarket();
+  if (id === 'diplomacy') renderDiplomacy();
+}
+function closePanels() { for (const p of PANELS) { const el = $(p); if (el) el.classList.add('hidden'); } }
+let recognizer = null;
+function startAssist() {
+  const voiceEl = $('voice');
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    const text = window.prompt('Assistant — say what you want:', '');
+    if (text) assistantIntent(text);
+    return;
+  }
+  if (recognizer) { try { recognizer.stop(); } catch (e) {} recognizer = null; return; }
+  recognizer = new SR();
+  recognizer.lang = 'en-US';
+  recognizer.interimResults = false;
+  recognizer.maxAlternatives = 1;
+  recognizer.onstart = () => { if (voiceEl) voiceEl.classList.remove('hidden'); };
+  recognizer.onend = () => { if (voiceEl) voiceEl.classList.add('hidden'); recognizer = null; };
+  recognizer.onerror = () => {
+    if (voiceEl) voiceEl.classList.add('hidden');
+    toast('VOICE UNAVAILABLE · USE THE CITIZENS PANEL OR THE PAD', 3000);
+  };
+  recognizer.onresult = (ev) => {
+    const text = ev.results && ev.results[0] && ev.results[0][0] ? ev.results[0][0].transcript : '';
+    if (text) assistantIntent(text);
+  };
+  try { recognizer.start(); } catch (e) { if (voiceEl) voiceEl.classList.add('hidden'); }
+}
+function speak(text) {
+  if (muted || !('speechSynthesis' in window)) return;
+  try {
+    const u = new SpeechSynthesisUtterance(String(text).slice(0, 220));
+    u.rate = 1.02; u.pitch = 1.0;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+function assistantIntent(text) {
+  const low = String(text || '').toLowerCase().trim();
+  if (!low) return '';
+  let reply = '';
+  let m;
+  if ((m = /create (?:a |an )?(settler|worker|trader|scholar|ranger|guard|diplomat|artisan)(?: named ([a-z0-9 ]{1,24}))?/.exec(low))) {
+    reply = createCitizen(m[1], (m[2] || m[1]).trim().replace(/\b\w/g, (c) => c.toUpperCase()));
+    openPanel('citizens');
+  } else if ((m = /(?:tell|guide|direct) the citizens? to (.+)/.exec(low))) {
+    reply = guideCitizens(m[1]);
+    openPanel('citizens');
+  } else if (/(put the citizens to work|plan the citizens|assign (the )?citizens)/.test(low)) {
+    reply = planCitizens();
+    openPanel('citizens');
+  } else if ((m = /deploy ([a-z0-9 ]{1,24}?) to shard ([1-4])/.exec(low))) {
+    const name = m[1].trim();
+    const c = state.citizens.find((x) => x.name.toLowerCase() === name);
+    reply = c ? deployCitizen(c.id, Number(m[2]) - 1) : `No citizen named ${name}.`;
+  } else if (/citizen/.test(low) && /(status|doing|report|list)/.test(low)) {
+    reply = citizenStatus();
+    openPanel('citizens');
+  } else if (/market|price|buy|sell/.test(low)) {
+    reply = 'Regional market open. Prices are game credits; BTC never moves here.';
+    openPanel('market');
+  } else if (/diplomacy|relation|standing|gift/.test(low)) {
+    reply = 'AI relations open. Contact works in any shard; aggression cools after seven game days.';
+    openPanel('diplomacy');
+  } else if (/map|shard|explore/.test(low)) {
+    reply = `Mapped ${countBits(state.shards)} of ${SHARD_COUNT} shards. The AI roams every one.`;
+    toggleMap();
+  } else if (/claim|photo|farm/.test(low)) {
+    if (nearBiz && !state.farmed.includes(nearBiz.id)) { beginClaim(nearBiz); reply = `Photo claim started for ${nearBiz.name}.`; }
+    else reply = nearBiz ? 'That business is already claimed this game day.' : 'Walk to a business first; I cannot take the photo for you.';
+  } else if (/talk|speak|hello/.test(low)) {
+    if (nearNPC) { openDialogue(nearNPC); reply = `Talking to ${nearNPC.name}.`; }
+    else reply = 'Walk to a neighbour first; I will not move your body.';
+  } else if (/restart|new epoch|reset/.test(low)) {
+    if (/confirm/.test(low)) {
+      restartEpoch();
+      reply = `Epoch ${state.epoch} started in cohort ${state.epochCohort}. Nothing carried over.`;
+    } else {
+      requestRestart();
+      reply = 'A restart starts a new epoch in the same cohort and nothing carries over. Say "confirm restart" or tap EPOCH again.';
+    }
+  } else if (/help|what can/.test(low)) {
+    reply = 'I can create citizens, set their goal, plan toil, deploy them, open the market or relations, map shards, claim and talk. The pad does the same directly.';
+  } else {
+    reply = 'I can create citizens, guide or plan them, deploy to a shard, open the market or relations, map, claim or talk.';
+  }
+  mqttPublish('assistant/intent', { text: low, reply, pid: NET.pid || 'solo', at: Date.now() }, 1, false);
+  appendChat('ASSISTANT', reply, false, true);
+  toast(reply.toUpperCase().slice(0, 120), 3400);
+  speak(reply);
+  return reply;
+}
+function padAction(id) {
+  if (id === 'assist') return startAssist();
+  if (id === 'claim') {
+    if (nearBiz && !state.farmed.includes(nearBiz.id)) beginClaim(nearBiz);
+    else toast(nearBiz ? 'ALREADY FARMED THIS GAME DAY' : 'WALK TO A BUSINESS FIRST', 2200);
+    return;
+  }
+  if (id === 'talk') {
+    if (nearNPC) openDialogue(nearNPC);
+    else toast('WALK TO A NEIGHBOUR FIRST', 2000);
+    return;
+  }
+  if (id === 'map') return toggleMap();
+  if (id === 'epoch') return requestRestart();
+  openPanel(id);
+}
+for (const btn of document.querySelectorAll('#pad button')) {
+  btn.addEventListener('click', () => padAction(btn.dataset.pad));
+}
+for (const btn of document.querySelectorAll('[data-close]')) {
+  btn.addEventListener('click', () => { const el = $(btn.dataset.close); if (el) el.classList.add('hidden'); });
+}
+if ($('btnCitizens')) $('btnCitizens').addEventListener('click', () => openPanel('citizens'));
+if ($('btnAssist')) $('btnAssist').addEventListener('click', startAssist);
+if ($('citCreate')) $('citCreate').addEventListener('click', () => {
+  const name = ($('citName').value || '').trim();
+  const kind = $('citKind').value;
+  toast(createCitizen(kind, name).toUpperCase(), 3200);
+  if ($('citName')) $('citName').value = '';
+});
+if ($('citGuideBtn')) $('citGuideBtn').addEventListener('click', () => {
+  const text = ($('citGuide').value || '').trim();
+  if (text) toast(guideCitizens(text).toUpperCase(), 3200);
+});
+if ($('citPlan')) $('citPlan').addEventListener('click', () => toast(planCitizens().toUpperCase(), 3200));
+if ($('citMap')) $('citMap').addEventListener('click', () => { guideCitizens('map every shard'); toast(planCitizens().toUpperCase(), 3200); });
+addEventListener('keydown', (e) => {
+  if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+  if (e.code === 'KeyC') openPanel('citizens');
+  else if (e.code === 'KeyV') startAssist();
+  else if (e.code === 'KeyM') openPanel('market');
+  else if (e.code === 'KeyR') openPanel('diplomacy');
+  else if (e.code === 'Escape') closePanels();
+});
+
 window.__nc = {
   get ready() { return started; },
   get player() { return player; },
@@ -2803,6 +3268,15 @@ window.__nc = {
   chat(text) { sendChat(String(text)); },
   verify(pid) { return verifyPlayer(pid); },
   get sats() { return state.sats; },
+  get credits() { return state.credits; },
+  get shards() { return state.shards; },
+  get citizens() { return state.citizens.map((c) => ({ ...c })); },
+  get goal() { return state.goal; },
+  get epoch() { return { id: state.epoch, cohort: state.epochCohort, day: epochDay(), archive: state.epochArchive.length }; },
+  restartEpoch, requestRestart,
+  shardAt, createCitizen, guideCitizens, planCitizens, deployCitizen, citizenStatus,
+  assistantIntent, openPanel, closePanels,
+  market() { return BUSINESSES.map((b) => ({ id: b.id, item: b.item, price: marketPrice(b) })); },
   get gameDay() { return gameDay(); },
   get inventory() { return { ...state.inventory }; },
   async exif() { return photoExif(photoInput.files[0]); },
