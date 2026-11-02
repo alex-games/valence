@@ -518,7 +518,7 @@ button.btn:active { transform: translateY(1px); }
 }
 
 /* ------------------------------------------------------- talk/dialogue --- */
-#talk {
+#talk, #farm {
   position: absolute;
   left: 50%;
   bottom: calc(92px + env(safe-area-inset-bottom));
@@ -535,9 +535,9 @@ button.btn:active { transform: translateY(1px); }
   z-index: 8;
   box-shadow: var(--shadow);
 }
-#talk.hidden { display: none; }
-#talk b { font-size: 9px; color: var(--gold); letter-spacing: 0.08em; }
-#talk span { font-size: 9px; color: var(--muted); letter-spacing: 0.06em; }
+#talk.hidden, #farm.hidden { display: none; }
+#talk b, #farm b { font-size: 9px; color: var(--gold); letter-spacing: 0.08em; }
+#talk span, #farm span { font-size: 9px; color: var(--muted); letter-spacing: 0.06em; }
 #dialogue {
   position: absolute;
   left: 50%;
@@ -613,6 +613,7 @@ button.btn:active { transform: translateY(1px); }
   #chat { left: calc(8px + env(safe-area-inset-left)); right: calc(8px + env(safe-area-inset-right)); width: auto; bottom: calc(206px + env(safe-area-inset-bottom)); }
   #chatlog { max-height: 104px; }
   #talk { bottom: calc(196px + env(safe-area-inset-bottom)); }
+  #farm { bottom: calc(238px + env(safe-area-inset-bottom)); }
   #dialogue { bottom: calc(196px + env(safe-area-inset-bottom)); }
   .online { display: none; }
 }
@@ -637,3 +638,10 @@ button.btn:active { transform: translateY(1px); }
   cursor: pointer;
 }
 .vbtn:hover { border-color: var(--green); }
+
+#farm {
+  bottom: calc(138px + env(safe-area-inset-bottom));
+  border-color: rgba(143, 209, 79, 0.55);
+}
+#farm b { color: var(--green); }
+#farm span { color: var(--muted); }

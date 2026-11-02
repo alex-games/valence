@@ -526,7 +526,7 @@ button.btn:active { transform: translateY(1px); }
 }
 
 /* ------------------------------------------------------- talk/dialogue --- */
-#talk {
+#talk, #farm {
   position: absolute;
   left: 50%;
   bottom: calc(92px + env(safe-area-inset-bottom));
@@ -543,9 +543,9 @@ button.btn:active { transform: translateY(1px); }
   z-index: 8;
   box-shadow: var(--shadow);
 }
-#talk.hidden { display: none; }
-#talk b { font-size: 9px; color: var(--gold); letter-spacing: 0.08em; }
-#talk span { font-size: 9px; color: var(--muted); letter-spacing: 0.06em; }
+#talk.hidden, #farm.hidden { display: none; }
+#talk b, #farm b { font-size: 9px; color: var(--gold); letter-spacing: 0.08em; }
+#talk span, #farm span { font-size: 9px; color: var(--muted); letter-spacing: 0.06em; }
 #dialogue {
   position: absolute;
   left: 50%;
@@ -621,6 +621,7 @@ button.btn:active { transform: translateY(1px); }
   #chat { left: calc(8px + env(safe-area-inset-left)); right: calc(8px + env(safe-area-inset-right)); width: auto; bottom: calc(206px + env(safe-area-inset-bottom)); }
   #chatlog { max-height: 104px; }
   #talk { bottom: calc(196px + env(safe-area-inset-bottom)); }
+  #farm { bottom: calc(238px + env(safe-area-inset-bottom)); }
   #dialogue { bottom: calc(196px + env(safe-area-inset-bottom)); }
   .online { display: none; }
 }
@@ -645,6 +646,13 @@ button.btn:active { transform: translateY(1px); }
   cursor: pointer;
 }
 .vbtn:hover { border-color: var(--green); }
+
+#farm {
+  bottom: calc(138px + env(safe-area-inset-bottom));
+  border-color: rgba(143, 209, 79, 0.55);
+}
+#farm b { color: var(--green); }
+#farm span { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -659,6 +667,8 @@ button.btn:active { transform: translateY(1px); }
         <span>XYZ <b id="coords">—</b></span>
         <span>FPS <b id="fps">—</b> · <b id="mode">walking</b></span>
         <span>TOKENS <b id="tokens">0 / 8</b></span>
+        <span>SATS <b id="sats">0</b></span>
+        <span>GAME DAY <b id="day">—</b></span>
         <span>ANCHOR <b id="anchor">—</b></span>
         <span>WALLET <b id="wallet">—</b></span>
         <span id="net">OFFLINE · SOLO</span>
@@ -690,7 +700,9 @@ button.btn:active { transform: translateY(1px); }
     <div id="chatlog"></div>
     <form id="chatform" class="hidden"><input id="chatinput" maxlength="120" autocomplete="off" placeholder="Say something to the server…"><button type="submit">Send</button></form>
   </div>
+  <button id="farm" class="hidden"><b id="farmName">Business</b><span>E · PHOTO PROOF</span></button>
   <button id="talk" class="hidden"><b id="talkName">Mara</b><span>E · TALK</span></button>
+  <input id="photoInput" type="file" accept="image/jpeg" capture="environment" style="display:none">
   <div id="dialogue" class="hidden">
     <div class="dname" id="dialogueName">Mara</div>
     <p id="dialogueText"></p>
@@ -1045,6 +1057,10 @@ const playerNameEl = $('playerName');
 const onlineListEl = $('onlineList');
 const creditsBoxEl = $('creditsBox');
 const btnChatEl = $('btnChat');
+const farmEl = $('farm');
+const farmNameEl = $('farmName');
+const photoInput = $('photoInput');
+const satsEl = $('sats');
 
 const IS_TOUCH = matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window);
 if (IS_TOUCH) document.body.classList.add('touch');
@@ -1186,7 +1202,11 @@ const FALLBACK_WORLD = {
     { name: 'THE COFFEE BEAN', x: 68, y: 17, z: 65, cls: '' },
     { name: 'MARTIN CHEVROLET', x: 25, y: 16, z: 69, cls: '' },
     { name: 'FARMERS MARKET', x: 52, y: 14, z: 35, cls: 'green' },
-    { name: 'FREE BUILD', x: 48, y: 14, z: 88, cls: 'green' }
+    { name: 'FREE BUILD', x: 48, y: 14, z: 88, cls: 'green' },
+    { name: 'TORRANCE BAKERY', x: 54, y: 16, z: 9, cls: 'green' },
+    { name: 'RED CAR BREWERY', x: 54, y: 16, z: 15, cls: 'green' },
+    { name: 'OLD TORRANCE ANTIQUES', x: 41, y: 16, z: 61, cls: 'green' },
+    { name: 'MADRE!', x: 41, y: 16, z: 67, cls: 'green' }
   ],
   quests: [
     { id: 'garden', title: 'Visit the Community Garden', kind: 'zone', zone: { x: 25, z: 25, r: 14 } },
@@ -1214,6 +1234,17 @@ const FALLBACK_WORLD = {
     { id: 'market', x: 52.5, y: 10.4, z: 34.5 },
     { id: 'arch', x: 48.5, y: 14.5, z: 41.5 },
     { id: 'freebuild', x: 48.5, y: 10.2, z: 88.5 }
+  ],
+  businesses: [
+    { id: 'garden', lat: 33.8096, lon: -118.3547, radius: 300, name: 'Torrance Community Garden', x: 25.5, z: 33.5, item: 'wheat', qty: 3, sats: 20 },
+    { id: 'park', lat: 33.812, lon: -118.35, radius: 300, name: 'Lago Seco Park', x: 72.5, z: 34.5, item: 'token', qty: 1, sats: 15 },
+    { id: 'coffee', lat: 33.806, lon: -118.352, radius: 300, name: 'The Coffee Bean', x: 68.5, z: 67.5, item: 'coffee', qty: 2, sats: 30 },
+    { id: 'dealer', lat: 33.805, lon: -118.358, radius: 300, name: 'Martin Chevrolet', x: 24.5, z: 64.5, item: 'brick', qty: 2, sats: 40 },
+    { id: 'market', lat: 33.809, lon: -118.353, radius: 300, name: 'Farmers Market', x: 52.5, z: 35.5, item: 'token', qty: 1, sats: 25 },
+    { id: 'bakery', lat: 33.8105, lon: -118.356, radius: 300, name: 'Torrance Bakery', x: 54.5, z: 12.5, item: 'wheat', qty: 2, sats: 20 },
+    { id: 'brewery', lat: 33.811, lon: -118.355, radius: 300, name: 'Red Car Brewery', x: 54.5, z: 18.5, item: 'coffee', qty: 1, sats: 35 },
+    { id: 'antiques', lat: 33.8075, lon: -118.359, radius: 300, name: 'Old Torrance Antiques', x: 41.5, z: 64.5, item: 'token', qty: 1, sats: 50 },
+    { id: 'madre', lat: 33.808, lon: -118.36, radius: 300, name: 'Madre!', x: 41.5, z: 70.5, item: 'carrot', qty: 2, sats: 30 }
   ],
   copy: { hint: 'Click to look · WASD to move · E to talk · T to chat', started: 'TORRANCE · FOLLOW THE PALE PATHS · TALK TO THE NEIGHBOURS' }
 };
@@ -1756,6 +1787,22 @@ function genWorld() {
   fillB(38, GROUND + 4, 30, 38, GROUND + 4, 32, PLANKS);
   setB(38, GROUND + 3, 31, SIGN); setB(38, GROUND + 2, 31, SIGN);
 
+  // ------------------------------------------------------------- local businesses
+  const shop = (x, z, roof) => {
+    fillB(x, GROUND, z, x + 3, GROUND, z + 3, PLANKS);
+    fillB(x, GROUND + 1, z, x + 3, GROUND + 3, z, WHITE);
+    fillB(x, GROUND + 1, z + 3, x + 3, GROUND + 3, z + 3, WHITE);
+    fillB(x, GROUND + 1, z, x, GROUND + 3, z + 3, WHITE);
+    fillB(x + 3, GROUND + 1, z, x + 3, GROUND + 3, z + 3, WHITE);
+    fillB(x + 1, GROUND + 1, z + 3, x + 2, GROUND + 2, z + 3, AIR);
+    fillB(x, GROUND + 4, z, x + 3, GROUND + 4, z + 3, roof);
+    fillB(x + 1, GROUND + 3, z + 3, x + 2, GROUND + 3, z + 3, SIGN);
+  };
+  shop(52, 8, ROOF_RED);    // Torrance Bakery
+  shop(52, 14, ROOF_BLUE);  // Red Car Brewery
+  shop(39, 60, ROOF_GREEN); // Old Torrance Antiques
+  shop(39, 66, ROOF_RED);   // Madre!
+
   // ------------------------------------------------------------------ greenery
   for (let i = 0; i < 220; i++) {
     const x = 2 + ((rnd() * (WX - 4)) | 0);
@@ -1769,7 +1816,7 @@ function genWorld() {
   // ------------------------------------------------------------ street furniture
   const streetTrees = [[9, 41], [21, 41], [33, 41], [59, 41], [70, 41], [82, 41],
                        [9, 52], [21, 52], [33, 52], [58, 52], [70, 52], [82, 52],
-                       [41, 9], [41, 21], [41, 33], [52, 9], [52, 21], [52, 60], [41, 60], [41, 72], [52, 72]];
+                       [41, 9], [41, 21], [41, 33], [56, 8], [52, 21], [52, 60], [43, 58], [41, 72], [52, 72]];
   streetTrees.forEach(([x, z]) => tree(x, z, 4));
   const lamps = [[7, 43], [19, 43], [31, 43], [57, 43], [69, 43], [81, 43],
                  [7, 50], [19, 50], [31, 50], [57, 50], [69, 50], [81, 50],
@@ -2091,6 +2138,15 @@ function meshAll() {
 }
 
 // ------------------------------------------------------------------- player --
+const GAME_DAY_MS = 60 * 60 * 1000;
+function gameDay(ms) { return Math.floor((ms === undefined ? Date.now() : ms) / GAME_DAY_MS); }
+function gameDayStart(ms) { return gameDay(ms) * GAME_DAY_MS; }
+function parseExifDate(text) {
+  const m = /^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/.exec(text || '');
+  if (!m) return null;
+  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+}
+
 const player = {
   x: SPAWN.x, y: SPAWN.y, z: SPAWN.z,
   vx: 0, vy: 0, vz: 0,
@@ -2151,7 +2207,7 @@ function setKey(code, down) {
   if (down && code === 'KeyF') { player.fly = !player.fly; player.vy = 0; toast(player.fly ? 'FLY ON · Space up · Shift down' : 'FLY OFF'); }
   if (down && code === 'KeyM') toggleMap();
   if (down && code === 'KeyH') openHelp();
-  if (down && code === 'KeyE') { if (dialogueNPC) advanceDialogue(); else if (nearNPC) openDialogue(nearNPC); }
+  if (down && code === 'KeyE') { if (dialogueNPC) advanceDialogue(); else if (nearBiz && !state.farmed.includes(nearBiz.id)) beginClaim(nearBiz); else if (nearNPC) openDialogue(nearNPC); }
   if (down && code === 'KeyT') showChat(true);
   if (down && code === 'Escape') { showChat(false); closeDialogue(); closeModals(); }
   if (down && /^Digit[1-9]$/.test(code)) selectSlot(Number(code.slice(5)) - 1);
@@ -2347,6 +2403,12 @@ const NPC_LABELS = NPCS.map((n) => {
   return el;
 });
 
+const BUSINESSES = (Array.isArray(WORLD.businesses) ? WORLD.businesses : FALLBACK_WORLD.businesses)
+  .filter((b) => b && b.id && typeof b.x === 'number' && typeof b.z === 'number')
+  .map((b) => ({
+    id: b.id, name: b.name || b.id, x: b.x, z: b.z, item: b.item || 'wheat',
+    qty: b.qty | 0, sats: b.sats | 0, lat: b.lat, lon: b.lon, radius: b.radius || 300
+  }));
 const TOKENS = (Array.isArray(WORLD.tokens) ? WORLD.tokens : FALLBACK_WORLD.tokens)
   .filter((t) => t && t.id && typeof t.x === 'number' && typeof t.z === 'number')
   .map((t) => ({ id: t.id, x: t.x, y: typeof t.y === 'number' ? t.y : GROUND + 2, z: t.z }));
@@ -2354,6 +2416,10 @@ const TOKENS = (Array.isArray(WORLD.tokens) ? WORLD.tokens : FALLBACK_WORLD.toke
 const state = {
   quests: Object.create(null),
   tokens: [],
+  inventory: Object.create(null),
+  sats: 0,
+  farmDay: '',
+  farmed: [],
   placed: 0,
   broken: 0,
   started: 0,
@@ -2371,7 +2437,8 @@ function saveNow() {
     for (const [k, v] of edits) e[k] = v;
     store.setItem(SAVE_KEY, JSON.stringify({
       v: 1, p: [player.x, player.y, player.z], yaw: player.yaw, pitch: player.pitch,
-      q: state.quests, tokens: state.tokens, placed: state.placed, broken: state.broken,
+      q: state.quests, tokens: state.tokens, inventory: state.inventory, sats: state.sats,
+      farmDay: state.farmDay, farmed: state.farmed, placed: state.placed, broken: state.broken,
       started: state.started, finished: state.finished, edits: e
     }));
   } catch (e) {}
@@ -2390,6 +2457,10 @@ function loadSave() {
     if (typeof s.pitch === 'number') player.pitch = s.pitch;
     state.quests = s.q || Object.create(null);
     state.tokens = Array.isArray(s.tokens) ? s.tokens.filter((x) => typeof x === 'string') : [];
+    state.inventory = s.inventory && typeof s.inventory === 'object' ? s.inventory : Object.create(null);
+    state.sats = typeof s.sats === 'number' ? s.sats : 0;
+    state.farmDay = typeof s.farmDay === 'number' ? s.farmDay : Number(s.farmDay) || 0;
+    state.farmed = Array.isArray(s.farmed) ? s.farmed.filter((x) => typeof x === 'string') : [];
     state.placed = s.placed | 0; state.broken = s.broken | 0;
     state.started = s.started | 0; state.finished = !!s.finished;
     if (s.edits) for (const k of Object.keys(s.edits)) edits.set(k, s.edits[k] | 0);
@@ -2511,6 +2582,19 @@ let nearNPC = null, dialogueNPC = null, dialogueLine = 0;
 function npcDistance(n) {
   return Math.hypot(player.x - n.x, (player.y + 0.9) - (n.y + n.size[1] * 0.5), player.z - n.z);
 }
+let nearBiz = null, pendingClaim = null;
+function ensureFarmDay() {
+  const day = gameDay();
+  if (state.farmDay !== day) { state.farmDay = day; state.farmed = []; }
+}
+function farmDistance(b) { return Math.hypot(player.x - b.x, player.z - b.z); }
+function renderSats() { if (satsEl) satsEl.textContent = String(state.sats); }
+function renderDay() {
+  const el = document.getElementById('day');
+  if (!el) return;
+  const left = Math.max(0, Math.ceil((gameDayStart() + GAME_DAY_MS - Date.now()) / 60000));
+  el.textContent = `#${gameDay()} · ${left}m`;
+}
 function updateNearNPC() {
   let best = null, bd = 2.7;
   for (const n of NPCS) {
@@ -2518,12 +2602,131 @@ function updateNearNPC() {
     if (d < bd) { bd = d; best = n; }
   }
   nearNPC = best;
+  ensureFarmDay();
+  let biz = null, bizDist = 4.2;
+  for (const b of BUSINESSES) {
+    const d = farmDistance(b);
+    if (d < bizDist) { bizDist = d; biz = b; }
+  }
+  nearBiz = biz;
+  const canFarm = biz && !state.farmed.includes(biz.id) && helpEl.classList.contains('hidden');
+  if (canFarm) {
+    farmEl.classList.remove('hidden');
+    farmNameEl.textContent = biz.name;
+  } else {
+    farmEl.classList.add('hidden');
+  }
   if (best && !dialogueNPC && helpEl.classList.contains('hidden')) {
     talkEl.classList.remove('hidden');
     talkNameEl.textContent = best.name;
   } else {
     talkEl.classList.add('hidden');
   }
+}
+async function photoExif(file) {
+  try {
+    const b = new Uint8Array(await file.arrayBuffer());
+    if (b[0] !== 0xff || b[1] !== 0xd8) return null;
+    let off = 2;
+    while (off + 4 < b.length) {
+      if (b[off] !== 0xff) { off++; continue; }
+      const marker = b[off + 1];
+      if (marker === 0xda) break;
+      const len = (b[off + 2] << 8) | b[off + 3];
+      if (marker === 0xe1 && b[off + 4] === 0x45 && b[off + 5] === 0x78) {
+        return parseTiff(b, off + 10);
+      }
+      off += 2 + len;
+      if (len <= 0) break;
+    }
+  } catch (e) {}
+  return null;
+}
+function parseTiff(b, base) {
+  const le = b[base] === 0x49;
+  const u16 = (o) => le ? (b[o] | (b[o + 1] << 8)) : ((b[o] << 8) | b[o + 1]);
+  const u32 = (o) => le
+    ? ((b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0)
+    : (((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0);
+  if (u16(base + 2) !== 42) return null;
+  const ifd0 = base + u32(base + 4);
+  const read = (off) => {
+    const n = u16(off), entries = {};
+    for (let i = 0; i < n; i++) {
+      const p = off + 2 + i * 12;
+      entries[u16(p)] = { type: u16(p + 2), count: u32(p + 4), val: u32(p + 8), p };
+    }
+    return entries;
+  };
+  const ascii = (ent) => {
+    if (!ent) return '';
+    const o = ent.count <= 4 ? ent.p + 8 : base + ent.val;
+    let out = '';
+    for (let i = 0; i < ent.count; i++) { const c = b[o + i]; if (!c) break; out += String.fromCharCode(c); }
+    return out;
+  };
+  const rational = (o) => { const n = u32(o), d = u32(o + 4); return d ? n / d : 0; };
+  const ifd = read(ifd0);
+  const exif = ifd[0x8769] ? read(base + ifd[0x8769].val) : {};
+  const gps = ifd[0x8825] ? read(base + ifd[0x8825].val) : {};
+  const coord = (ent, ref) => {
+    if (!ent || ent.count !== 3) return null;
+    const o = base + ent.val;
+    const d = rational(o) + rational(o + 4) / 60 + rational(o + 8) / 3600;
+    return (ref === 'S' || ref === 'W') ? -d : d;
+  };
+  return {
+    lat: coord(gps[2], ascii(gps[1]).trim()), lon: coord(gps[4], ascii(gps[3]).trim()),
+    date: ascii(exif[0x9003] || ifd[0x0132]),
+    make: ascii(ifd[0x010f]).trim(), model: ascii(ifd[0x0110]).trim()
+  };
+}
+function haversine(a, b, c, d) {
+  const r = 6371000, p = Math.PI / 180;
+  const x = Math.sin((c - a) * p / 2) ** 2 + Math.cos(a * p) * Math.cos(c * p) * Math.sin((d - b) * p / 2) ** 2;
+  return 2 * r * Math.asin(Math.min(1, Math.sqrt(x)));
+}
+function beginClaim(b) {
+  if (!b) return;
+  ensureFarmDay();
+  if (state.farmed.includes(b.id)) { toast('ALREADY FARMED TODAY · COME BACK TOMORROW', 2600); return; }
+  if (farmDistance(b) > 4.2) { toast('WALK TO ' + b.name.toUpperCase() + ' FIRST', 2600); return; }
+  pendingClaim = b;
+  photoInput.value = '';
+  photoInput.click();
+}
+async function handlePhoto(file) {
+  const b = pendingClaim;
+  pendingClaim = null;
+  if (!b || !file) return;
+  const exif = await photoExif(file);
+  window.__lastExif = exif;
+  if (!exif || exif.lat === null || exif.lon === null) {
+    toast('PHOTO HAS NO GPS EXIF · TAKE IT IN THE CAMERA AT THE BUSINESS', 3600); return;
+  }
+  ensureFarmDay();
+  const takenMs = parseExifDate(exif.date);
+  const start = gameDayStart();
+  if (takenMs === null || takenMs < start - 300000 || takenMs > Date.now() + 300000) {
+    toast('PHOTO IS NOT FROM THIS GAME DAY', 3000); return;
+  }
+  const d = haversine(exif.lat, exif.lon, b.lat, b.lon);
+  if (d > b.radius) { toast(`PHOTO IS ${Math.round(d)} m FROM ${b.name.toUpperCase()}`, 3600); return; }
+  if (farmDistance(b) > 4.2) { toast('WALK TO ' + b.name.toUpperCase() + ' FIRST', 2600); return; }
+  if (state.farmed.includes(b.id)) { toast('ALREADY FARMED TODAY', 2400); return; }
+  state.farmed.push(b.id);
+  state.inventory[b.item] = (state.inventory[b.item] || 0) + b.qty;
+  state.sats += b.sats;
+  renderSats();
+  saveSoon();
+  beep(720, 0.08, 'triangle', 0.02);
+  setTimeout(() => beep(1080, 0.12, 'triangle', 0.018), 90);
+  toast(`FARMED ${b.name.toUpperCase()} · +${b.qty} ${b.item.toUpperCase()} · +${b.sats} SATS · PHOTO VERIFIED`, 4600);
+  mqttPublish('commerce/farm', {
+    id: b.id, item: b.item, qty: b.qty, sats: b.sats, day: gameDay(),
+    proof: { lat: exif.lat, lon: exif.lon, distance_m: Math.round(d), taken: exif.date,
+             make: exif.make, model: exif.model }
+  }, 1, false);
 }
 function showDialogueLine() {
   if (!dialogueNPC) return;
@@ -3438,6 +3641,7 @@ function frame(now) {
     collectTokens();
     updateNearNPC();
     renderQuests();
+    renderDay();
     if (questCount() > 0 && state.started === 0) { state.started = Date.now(); saveSoon(); }
   }
   saveTick += dt;
@@ -3496,6 +3700,10 @@ function initUI() {
     if (e.key === 'Escape') { e.preventDefault(); showChat(false); }
   });
   talkEl.addEventListener('click', () => openDialogue(nearNPC));
+  farmEl.addEventListener('click', () => beginClaim(nearBiz));
+  photoInput.addEventListener('change', () => handlePhoto(photoInput.files[0]));
+  ensureFarmDay();
+  renderSats();
   dialogueNextEl.addEventListener('click', advanceDialogue);
   playerNameEl.addEventListener('change', () => {
     NET.name = sanitizeName(playerNameEl.value);
@@ -3530,12 +3738,17 @@ function resetWorld() {
   edits.clear();
   state.quests = Object.create(null);
   state.tokens = [];
+  state.inventory = Object.create(null);
+  state.sats = 0;
+  state.farmDay = '';
+  state.farmed = [];
   state.placed = 0; state.broken = 0; state.started = 0; state.finished = false;
   genWorld();
   for (let i = 0; i < CX * CZ; i++) remesh(i);
   resetPosition();
   saveNow();
   renderTokens();
+  renderSats();
   netSendScore();
   helpEl.classList.add('hidden');
   completeEl.classList.add('hidden');
@@ -3605,6 +3818,18 @@ window.__nc = {
   },
   chat(text) { sendChat(String(text)); },
   verify(pid) { return verifyPlayer(pid); },
+  get sats() { return state.sats; },
+  get gameDay() { return gameDay(); },
+  get inventory() { return { ...state.inventory }; },
+  async exif() { return photoExif(photoInput.files[0]); },
+  claimState() { return { pending: pendingClaim && pendingClaim.id, farmed: state.farmed.slice(), sats: state.sats }; },
+  claim(id) {
+    const b = BUSINESSES.find((x) => x.id === id);
+    if (!b) return false;
+    if (farmDistance(b) > 4.2) return false;
+    pendingClaim = b;
+    return true;
+  },
   ledger() {
     return {
       anchor: NET.anchor, sides: [...NET.sides.keys()],

@@ -20,6 +20,8 @@
         <span>XYZ <b id="coords">—</b></span>
         <span>FPS <b id="fps">—</b> · <b id="mode">walking</b></span>
         <span>TOKENS <b id="tokens">0 / 8</b></span>
+        <span>SATS <b id="sats">0</b></span>
+        <span>GAME DAY <b id="day">—</b></span>
         <span>ANCHOR <b id="anchor">—</b></span>
         <span>WALLET <b id="wallet">—</b></span>
         <span id="net">OFFLINE · SOLO</span>
@@ -51,7 +53,9 @@
     <div id="chatlog"></div>
     <form id="chatform" class="hidden"><input id="chatinput" maxlength="120" autocomplete="off" placeholder="Say something to the server…"><button type="submit">Send</button></form>
   </div>
+  <button id="farm" class="hidden"><b id="farmName">Business</b><span>E · PHOTO PROOF</span></button>
   <button id="talk" class="hidden"><b id="talkName">Mara</b><span>E · TALK</span></button>
+  <input id="photoInput" type="file" accept="image/jpeg" capture="environment" style="display:none">
   <div id="dialogue" class="hidden">
     <div class="dname" id="dialogueName">Mara</div>
     <p id="dialogueText"></p>

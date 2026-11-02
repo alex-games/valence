@@ -85,6 +85,34 @@
       "y": 14,
       "z": 88,
       "cls": "green"
+    },
+    {
+      "name": "TORRANCE BAKERY",
+      "x": 54,
+      "y": 16,
+      "z": 9,
+      "cls": "green"
+    },
+    {
+      "name": "RED CAR BREWERY",
+      "x": 54,
+      "y": 16,
+      "z": 15,
+      "cls": "green"
+    },
+    {
+      "name": "OLD TORRANCE ANTIQUES",
+      "x": 41,
+      "y": 16,
+      "z": 61,
+      "cls": "green"
+    },
+    {
+      "name": "MADRE!",
+      "x": 41,
+      "y": 16,
+      "z": 67,
+      "cls": "green"
     }
   ],
   "quests": [
@@ -323,5 +351,115 @@
     "hint": "Click to look · WASD to move · E to talk · T to chat",
     "started": "TORRANCE · FOLLOW THE PALE PATHS · TALK TO THE NEIGHBOURS",
     "complete": "Six quests, the garden, the park, the coffee shop and the dealership — beginner level complete."
-  }
+  },
+  "businesses": [
+    {
+      "id": "garden",
+      "name": "Torrance Community Garden",
+      "x": 25.5,
+      "z": 33.5,
+      "item": "wheat",
+      "qty": 3,
+      "sats": 20,
+      "lat": 33.8096,
+      "lon": -118.3547,
+      "radius": 300
+    },
+    {
+      "id": "park",
+      "name": "Lago Seco Park",
+      "x": 72.5,
+      "z": 34.5,
+      "item": "token",
+      "qty": 1,
+      "sats": 15,
+      "lat": 33.812,
+      "lon": -118.35,
+      "radius": 300
+    },
+    {
+      "id": "coffee",
+      "name": "The Coffee Bean",
+      "x": 68.5,
+      "z": 67.5,
+      "item": "coffee",
+      "qty": 2,
+      "sats": 30,
+      "lat": 33.806,
+      "lon": -118.352,
+      "radius": 300
+    },
+    {
+      "id": "dealer",
+      "name": "Martin Chevrolet",
+      "x": 24.5,
+      "z": 64.5,
+      "item": "brick",
+      "qty": 2,
+      "sats": 40,
+      "lat": 33.805,
+      "lon": -118.358,
+      "radius": 300
+    },
+    {
+      "id": "market",
+      "name": "Farmers Market",
+      "x": 52.5,
+      "z": 35.5,
+      "item": "token",
+      "qty": 1,
+      "sats": 25,
+      "lat": 33.809,
+      "lon": -118.353,
+      "radius": 300
+    },
+    {
+      "id": "bakery",
+      "name": "Torrance Bakery",
+      "x": 54.5,
+      "z": 12.5,
+      "item": "wheat",
+      "qty": 2,
+      "sats": 20,
+      "lat": 33.8105,
+      "lon": -118.356,
+      "radius": 300
+    },
+    {
+      "id": "brewery",
+      "name": "Red Car Brewery",
+      "x": 54.5,
+      "z": 18.5,
+      "item": "coffee",
+      "qty": 1,
+      "sats": 35,
+      "lat": 33.811,
+      "lon": -118.355,
+      "radius": 300
+    },
+    {
+      "id": "antiques",
+      "name": "Old Torrance Antiques",
+      "x": 41.5,
+      "z": 64.5,
+      "item": "token",
+      "qty": 1,
+      "sats": 50,
+      "lat": 33.8075,
+      "lon": -118.359,
+      "radius": 300
+    },
+    {
+      "id": "madre",
+      "name": "Madre!",
+      "x": 41.5,
+      "z": 70.5,
+      "item": "carrot",
+      "qty": 2,
+      "sats": 30,
+      "lat": 33.808,
+      "lon": -118.36,
+      "radius": 300
+    }
+  ]
 }

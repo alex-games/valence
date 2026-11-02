@@ -7,49 +7,459 @@
   "coords": "33.8096°N 118.3547°W",
   "intro": "A quiet voxel sandbox built from the geofence the assistant measured at 33.8096°N, 118.3547°W — the Torrance Community Garden, Lago Seco Park, The Coffee Bean and Martin Chevrolet. No mobs, no damage, no hunger. Walk, build, talk to the neighbours, collect the eight emerald tokens and finish six beginner quests. Open it over HTTP to share the world with other players; the embedded WebView stays solo.",
   "ground": 8,
-  "bounds": { "x": 96, "y": 48, "z": 96 },
-  "spawn": { "x": 48.5, "y": 9, "z": 37.5, "yaw": 3.141592653589793, "pitch": -0.1 },
-  "multiplayer": { "enabled": true, "path": "/ws", "maxPlayers": 16, "tickMs": 120 },
-  "palette": ["Grass", "Dirt", "Stone", "Planks", "Glass", "Sand", "Leaves", "Asphalt", "Brick"],
+  "bounds": {
+    "x": 96,
+    "y": 48,
+    "z": 96
+  },
+  "spawn": {
+    "x": 48.5,
+    "y": 9,
+    "z": 37.5,
+    "yaw": 3.141592653589793,
+    "pitch": -0.1
+  },
+  "multiplayer": {
+    "enabled": true,
+    "path": "/ws",
+    "maxPlayers": 16,
+    "tickMs": 120
+  },
+  "palette": [
+    "Grass",
+    "Dirt",
+    "Stone",
+    "Planks",
+    "Glass",
+    "Sand",
+    "Leaves",
+    "Asphalt",
+    "Brick"
+  ],
   "pois": [
-    { "name": "SPAWN PLAZA", "x": 48, "y": 15, "z": 36, "cls": "green" },
-    { "name": "COMMUNITY GARDEN", "x": 25, "y": 16, "z": 25, "cls": "green" },
-    { "name": "LAGO SECO PARK", "x": 73, "y": 16, "z": 25, "cls": "blue" },
-    { "name": "THE COFFEE BEAN", "x": 68, "y": 17, "z": 65, "cls": "" },
-    { "name": "MARTIN CHEVROLET", "x": 25, "y": 16, "z": 69, "cls": "" },
-    { "name": "FARMERS MARKET", "x": 52, "y": 14, "z": 35, "cls": "green" },
-    { "name": "FREE BUILD", "x": 48, "y": 14, "z": 88, "cls": "green" }
+    {
+      "name": "SPAWN PLAZA",
+      "x": 48,
+      "y": 15,
+      "z": 36,
+      "cls": "green"
+    },
+    {
+      "name": "COMMUNITY GARDEN",
+      "x": 25,
+      "y": 16,
+      "z": 25,
+      "cls": "green"
+    },
+    {
+      "name": "LAGO SECO PARK",
+      "x": 73,
+      "y": 16,
+      "z": 25,
+      "cls": "blue"
+    },
+    {
+      "name": "THE COFFEE BEAN",
+      "x": 68,
+      "y": 17,
+      "z": 65,
+      "cls": ""
+    },
+    {
+      "name": "MARTIN CHEVROLET",
+      "x": 25,
+      "y": 16,
+      "z": 69,
+      "cls": ""
+    },
+    {
+      "name": "FARMERS MARKET",
+      "x": 52,
+      "y": 14,
+      "z": 35,
+      "cls": "green"
+    },
+    {
+      "name": "FREE BUILD",
+      "x": 48,
+      "y": 14,
+      "z": 88,
+      "cls": "green"
+    },
+    {
+      "name": "TORRANCE BAKERY",
+      "x": 54,
+      "y": 16,
+      "z": 9,
+      "cls": "green"
+    },
+    {
+      "name": "RED CAR BREWERY",
+      "x": 54,
+      "y": 16,
+      "z": 15,
+      "cls": "green"
+    },
+    {
+      "name": "OLD TORRANCE ANTIQUES",
+      "x": 41,
+      "y": 16,
+      "z": 61,
+      "cls": "green"
+    },
+    {
+      "name": "MADRE!",
+      "x": 41,
+      "y": 16,
+      "z": 67,
+      "cls": "green"
+    }
   ],
   "quests": [
-    { "id": "garden", "title": "Visit the Community Garden", "kind": "zone", "zone": { "x": 25, "z": 25, "r": 14 } },
-    { "id": "park", "title": "Walk the Lago Seco Park pier", "kind": "zone", "zone": { "x": 72.5, "z": 30, "r": 9 } },
-    { "id": "coffee", "title": "Step into The Coffee Bean", "kind": "zone", "zone": { "x": 68, "z": 65, "r": 8 } },
-    { "id": "dealer", "title": "Browse Martin Chevrolet", "kind": "zone", "zone": { "x": 25, "z": 69, "r": 12 } },
-    { "id": "place", "title": "Place 10 blocks", "kind": "place", "target": 10 },
-    { "id": "break", "title": "Break 5 blocks", "kind": "break", "target": 5 }
+    {
+      "id": "garden",
+      "title": "Visit the Community Garden",
+      "kind": "zone",
+      "zone": {
+        "x": 25,
+        "z": 25,
+        "r": 14
+      }
+    },
+    {
+      "id": "park",
+      "title": "Walk the Lago Seco Park pier",
+      "kind": "zone",
+      "zone": {
+        "x": 72.5,
+        "z": 30,
+        "r": 9
+      }
+    },
+    {
+      "id": "coffee",
+      "title": "Step into The Coffee Bean",
+      "kind": "zone",
+      "zone": {
+        "x": 68,
+        "z": 65,
+        "r": 8
+      }
+    },
+    {
+      "id": "dealer",
+      "title": "Browse Martin Chevrolet",
+      "kind": "zone",
+      "zone": {
+        "x": 25,
+        "z": 69,
+        "r": 12
+      }
+    },
+    {
+      "id": "place",
+      "title": "Place 10 blocks",
+      "kind": "place",
+      "target": 10
+    },
+    {
+      "id": "break",
+      "title": "Break 5 blocks",
+      "kind": "break",
+      "target": 5
+    }
   ],
   "npcs": [
-    { "id": "mara", "name": "Mara", "role": "Community gardener", "sprite": "gardener", "x": 25.5, "y": 9, "z": 33.5, "size": [1.5, 2.05], "lines": ["Welcome to the Community Garden. The wheat and carrots are yours to look at — not to eat.", "Six raised beds, one trough, and a shed that has seen better decades.", "If you find an emerald token, keep it. There are eight hidden around Torrance."] },
-    { "id": "noah", "name": "Noah", "role": "Barista", "sprite": "barista", "x": 68.5, "y": 9, "z": 67.5, "size": [1.5, 2.05], "lines": ["The Coffee Bean is open. Today's special is a flat white and a voxel biscuit.", "The patio is out back — the awning leaks only in imagination.", "The Chevrolet lot across the road has a car on a podium. Very Torrance."] },
-    { "id": "june", "name": "June", "role": "Park ranger", "sprite": "ranger", "x": 72.5, "y": 9, "z": 34.5, "size": [1.5, 2.05], "lines": ["Lago Seco Park. The pond is safe to swim in — nothing here bites.", "Walk the pier to the end and look back at the gazebo.", "Rusty the hedgehog lives near the south path. He is not a token."] },
-    { "id": "vic", "name": "Vic", "role": "Sales", "sprite": "dealer", "x": 24.5, "y": 9, "z": 64.5, "size": [1.5, 2.05], "lines": ["Six cars, all of them one previous owner: me.", "The silver one on the podium is not for sale. Probably.", "Take a look around. The keys are imaginary."] },
-    { "id": "pip", "name": "Pip", "role": "Market vendor", "sprite": "vendor", "x": 52.5, "y": 9, "z": 35.5, "size": [1.3, 1.6], "lines": ["Farmers market! Apples, bread, and a suspiciously square tomato.", "The stalls are open all day. The gnome discount is real.", "Eight emerald tokens are hidden. I have counted them twice."] },
-    { "id": "sol", "name": "Sol", "role": "Food truck cook", "sprite": "barista", "x": 61.5, "y": 9, "z": 72.5, "size": [1.5, 2.05], "lines": ["Tacos, coffee, or a square tomato? The truck is open.", "The Coffee Bean has the patio. I have the awning and the queue.", "If you find the arch token, you can fly. Try it."] },
-    { "id": "rusty", "name": "Rusty", "role": "Park hedgehog", "sprite": "hedgehog", "x": 67.5, "y": 9, "z": 37.5, "size": [1.15, 0.75], "lines": ["*rustle*", "Rusty looks at you with the calm of a creature with no quests.", "*sniff sniff*"] }
+    {
+      "id": "mara",
+      "name": "Mara",
+      "role": "Community gardener",
+      "sprite": "gardener",
+      "x": 25.5,
+      "y": 9,
+      "z": 33.5,
+      "size": [
+        1.5,
+        2.05
+      ],
+      "lines": [
+        "Welcome to the Community Garden. The wheat and carrots are yours to look at — not to eat.",
+        "Six raised beds, one trough, and a shed that has seen better decades.",
+        "If you find an emerald token, keep it. There are eight hidden around Torrance."
+      ]
+    },
+    {
+      "id": "noah",
+      "name": "Noah",
+      "role": "Barista",
+      "sprite": "barista",
+      "x": 68.5,
+      "y": 9,
+      "z": 67.5,
+      "size": [
+        1.5,
+        2.05
+      ],
+      "lines": [
+        "The Coffee Bean is open. Today's special is a flat white and a voxel biscuit.",
+        "The patio is out back — the awning leaks only in imagination.",
+        "The Chevrolet lot across the road has a car on a podium. Very Torrance."
+      ]
+    },
+    {
+      "id": "june",
+      "name": "June",
+      "role": "Park ranger",
+      "sprite": "ranger",
+      "x": 72.5,
+      "y": 9,
+      "z": 34.5,
+      "size": [
+        1.5,
+        2.05
+      ],
+      "lines": [
+        "Lago Seco Park. The pond is safe to swim in — nothing here bites.",
+        "Walk the pier to the end and look back at the gazebo.",
+        "Rusty the hedgehog lives near the south path. He is not a token."
+      ]
+    },
+    {
+      "id": "vic",
+      "name": "Vic",
+      "role": "Sales",
+      "sprite": "dealer",
+      "x": 24.5,
+      "y": 9,
+      "z": 64.5,
+      "size": [
+        1.5,
+        2.05
+      ],
+      "lines": [
+        "Six cars, all of them one previous owner: me.",
+        "The silver one on the podium is not for sale. Probably.",
+        "Take a look around. The keys are imaginary."
+      ]
+    },
+    {
+      "id": "pip",
+      "name": "Pip",
+      "role": "Market vendor",
+      "sprite": "vendor",
+      "x": 52.5,
+      "y": 9,
+      "z": 35.5,
+      "size": [
+        1.3,
+        1.6
+      ],
+      "lines": [
+        "Farmers market! Apples, bread, and a suspiciously square tomato.",
+        "The stalls are open all day. The gnome discount is real.",
+        "Eight emerald tokens are hidden. I have counted them twice."
+      ]
+    },
+    {
+      "id": "sol",
+      "name": "Sol",
+      "role": "Food truck cook",
+      "sprite": "barista",
+      "x": 61.5,
+      "y": 9,
+      "z": 72.5,
+      "size": [
+        1.5,
+        2.05
+      ],
+      "lines": [
+        "Tacos, coffee, or a square tomato? The truck is open.",
+        "The Coffee Bean has the patio. I have the awning and the queue.",
+        "If you find the arch token, you can fly. Try it."
+      ]
+    },
+    {
+      "id": "rusty",
+      "name": "Rusty",
+      "role": "Park hedgehog",
+      "sprite": "hedgehog",
+      "x": 67.5,
+      "y": 9,
+      "z": 37.5,
+      "size": [
+        1.15,
+        0.75
+      ],
+      "lines": [
+        "*rustle*",
+        "Rusty looks at you with the calm of a creature with no quests.",
+        "*sniff sniff*"
+      ]
+    }
   ],
   "tokens": [
-    { "id": "garden-shed", "x": 33.5, "y": 10.4, "z": 14.5 },
-    { "id": "gazebo", "x": 82.5, "y": 10.6, "z": 14.5 },
-    { "id": "pier", "x": 72.5, "y": 10.6, "z": 27.5 },
-    { "id": "coffee", "x": 68.5, "y": 10.5, "z": 65.5 },
-    { "id": "podium", "x": 25.5, "y": 12.4, "z": 77.5 },
-    { "id": "market", "x": 52.5, "y": 10.4, "z": 34.5 },
-    { "id": "arch", "x": 48.5, "y": 14.5, "z": 41.5 },
-    { "id": "freebuild", "x": 48.5, "y": 10.2, "z": 88.5 }
+    {
+      "id": "garden-shed",
+      "x": 33.5,
+      "y": 10.4,
+      "z": 14.5
+    },
+    {
+      "id": "gazebo",
+      "x": 82.5,
+      "y": 10.6,
+      "z": 14.5
+    },
+    {
+      "id": "pier",
+      "x": 72.5,
+      "y": 10.6,
+      "z": 27.5
+    },
+    {
+      "id": "coffee",
+      "x": 68.5,
+      "y": 10.5,
+      "z": 65.5
+    },
+    {
+      "id": "podium",
+      "x": 25.5,
+      "y": 12.4,
+      "z": 77.5
+    },
+    {
+      "id": "market",
+      "x": 52.5,
+      "y": 10.4,
+      "z": 34.5
+    },
+    {
+      "id": "arch",
+      "x": 48.5,
+      "y": 14.5,
+      "z": 41.5
+    },
+    {
+      "id": "freebuild",
+      "x": 48.5,
+      "y": 10.2,
+      "z": 88.5
+    }
   ],
   "copy": {
     "hint": "Click to look · WASD to move · E to talk · T to chat",
     "started": "TORRANCE · FOLLOW THE PALE PATHS · TALK TO THE NEIGHBOURS",
     "complete": "Six quests, the garden, the park, the coffee shop and the dealership — beginner level complete."
-  }
+  },
+  "businesses": [
+    {
+      "id": "garden",
+      "name": "Torrance Community Garden",
+      "x": 25.5,
+      "z": 33.5,
+      "item": "wheat",
+      "qty": 3,
+      "sats": 20,
+      "lat": 33.8096,
+      "lon": -118.3547,
+      "radius": 300
+    },
+    {
+      "id": "park",
+      "name": "Lago Seco Park",
+      "x": 72.5,
+      "z": 34.5,
+      "item": "token",
+      "qty": 1,
+      "sats": 15,
+      "lat": 33.812,
+      "lon": -118.35,
+      "radius": 300
+    },
+    {
+      "id": "coffee",
+      "name": "The Coffee Bean",
+      "x": 68.5,
+      "z": 67.5,
+      "item": "coffee",
+      "qty": 2,
+      "sats": 30,
+      "lat": 33.806,
+      "lon": -118.352,
+      "radius": 300
+    },
+    {
+      "id": "dealer",
+      "name": "Martin Chevrolet",
+      "x": 24.5,
+      "z": 64.5,
+      "item": "brick",
+      "qty": 2,
+      "sats": 40,
+      "lat": 33.805,
+      "lon": -118.358,
+      "radius": 300
+    },
+    {
+      "id": "market",
+      "name": "Farmers Market",
+      "x": 52.5,
+      "z": 35.5,
+      "item": "token",
+      "qty": 1,
+      "sats": 25,
+      "lat": 33.809,
+      "lon": -118.353,
+      "radius": 300
+    },
+    {
+      "id": "bakery",
+      "name": "Torrance Bakery",
+      "x": 54.5,
+      "z": 12.5,
+      "item": "wheat",
+      "qty": 2,
+      "sats": 20,
+      "lat": 33.8105,
+      "lon": -118.356,
+      "radius": 300
+    },
+    {
+      "id": "brewery",
+      "name": "Red Car Brewery",
+      "x": 54.5,
+      "z": 18.5,
+      "item": "coffee",
+      "qty": 1,
+      "sats": 35,
+      "lat": 33.811,
+      "lon": -118.355,
+      "radius": 300
+    },
+    {
+      "id": "antiques",
+      "name": "Old Torrance Antiques",
+      "x": 41.5,
+      "z": 64.5,
+      "item": "token",
+      "qty": 1,
+      "sats": 50,
+      "lat": 33.8075,
+      "lon": -118.359,
+      "radius": 300
+    },
+    {
+      "id": "madre",
+      "name": "Madre!",
+      "x": 41.5,
+      "z": 70.5,
+      "item": "carrot",
+      "qty": 2,
+      "sats": 30,
+      "lat": 33.808,
+      "lon": -118.36,
+      "radius": 300
+    }
+  ]
 }
