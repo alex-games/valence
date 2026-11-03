@@ -59,8 +59,8 @@ def main() -> int:
     # 7.1.13; the derived version line is not what Kconfig reads.
     s = set_unset(s, "BR2_LINUX_KERNEL_LATEST_VERSION")
     s = set_line(s, "BR2_LINUX_KERNEL_CUSTOM_VERSION", "y")
-    s = set_line(s, "BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE", '"7.2.10"')
-    s = set_line(s, "BR2_LINUX_KERNEL_VERSION", '"7.2.10"')
+    s = set_line(s, "BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE", '"7.2.3"')
+    s = set_line(s, "BR2_LINUX_KERNEL_VERSION", '"7.2.3"')
 
     # Mosquitto: the browser needs the WebSocket listener. Buildroot's built-in
     # implementation avoids pulling libwebsockets into the image.
