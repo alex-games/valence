@@ -54,6 +54,13 @@ def main() -> int:
     # was 7.2.10, and Buildroot's header check aborted with "expected 2.6.x".
     s = set_line(s, "BR2_KERNEL_HEADERS_AS_KERNEL", "y")
     s = set_unset(s, "BR2_KERNEL_HEADERS_LATEST")
+    # **The version lives in CUSTOM_VERSION_VALUE.** Setting only
+    # BR2_LINUX_KERNEL_VERSION left LATEST_VERSION=y and Buildroot built its own
+    # 7.1.13; the derived version line is not what Kconfig reads.
+    s = set_unset(s, "BR2_LINUX_KERNEL_LATEST_VERSION")
+    s = set_line(s, "BR2_LINUX_KERNEL_CUSTOM_VERSION", "y")
+    s = set_line(s, "BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE", '"7.2.10"')
+    s = set_line(s, "BR2_LINUX_KERNEL_VERSION", '"7.2.10"')
 
     # Mosquitto: the browser needs the WebSocket listener. Buildroot's built-in
     # implementation avoids pulling libwebsockets into the image.
