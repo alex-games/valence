@@ -34,6 +34,10 @@ def main() -> int:
         return 1
     entry = entry.removesuffix(".zst")
     html = page.read_text()
+    # **Kernel 7.2 rejects the old 9p cache mode on exec.** `cache=loose` made
+    # /sbin/init fail with EACCES (-13) on a 9p root; the plain mount works.
+    html = re.sub(r'rootflags=version=9p2000\.L,trans=virtio[^ "]*',
+                  'rootflags=version=9p2000.L,trans=virtio', html)
     updated, count = re.subn(
         r'const bzimageUrl = "[^"]*";',
         f'const bzimageUrl = "/vm/filesystem/{entry}";',
