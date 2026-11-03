@@ -219,3 +219,32 @@ The warm state is staged at `vm/runtime/state/v86state.bin.zst` with
 record. `ccache -s` still reports remote hits 1/132,627 even though Redis shows
 traffic — the gate prevents silent cold builds, but remote key reuse remains a
 tuning item.
+
+## Kernel 7.2.10 — CVE-2026-98432
+
+The guest moved from 7.0.14/7.1.13 to **7.2.10**. The flaw is a use-after-free in
+the ordinary IPv4 TCP handshake, not an MPTCP bug; MPTCP off does not avoid it.
+The kernel bump is the fix. Defence in depth:
+
+- `board/minecraft/linux.conf`: `# CONFIG_MPTCP is not set`
+- `rootfs_overlay/etc/sysctl.d/90-no-mptcp.conf`: `net.mptcp.enabled = 0`
+
+**Buildroot 2026.08.1 aborts on legacy symbols** (`Makefile.legacy`). The base
+`config-buildroot-2026.08.1` and `-debug` carried 909 symbols from older
+Buildroot releases, and `patch-defconfig.py` copied them into the minecraft
+config. Strip every symbol named in `Config.in.legacy` from the base configs
+before regenerating:
+
+```sh
+docker run --rm --entrypoint sh buildroot2026-minecraft -c \
+  "grep -o '^config BR2_[A-Z0-9_]*' /root/buildroot-2026.08.1/Config.in.legacy | awk '{print $2}'" \
+  > /tmp/legacy_syms.txt
+# remove those lines (and BR2_LEGACY) from config-buildroot-2026.08.1{,-debug}
+python3 config/board/minecraft/patch-defconfig.py
+```
+
+Then build:
+
+```sh
+./build2026-minecraft.sh --require-ccache
+```
