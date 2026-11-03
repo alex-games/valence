@@ -50,6 +50,10 @@ def main() -> int:
     s = set_line(s, "BR2_ROOTFS_POST_BUILD_SCRIPT", '"/config/board/minecraft/post-build.sh"')
     s = set_line(s, "BR2_ROOTFS_POST_IMAGE_SCRIPT", '"$(CONFIG_DIR)/board/minecraft/post-image.sh"')
     s = set_line(s, "BR2_LINUX_KERNEL_CUSTOM_CONFIG_FILE", '"$(CONFIG_DIR)/board/minecraft/linux.conf"')
+    # **Headers must follow the kernel.** `LATEST` selected 7.2.3 while the kernel
+    # was 7.2.10, and Buildroot's header check aborted with "expected 2.6.x".
+    s = set_line(s, "BR2_KERNEL_HEADERS_AS_KERNEL", "y")
+    s = set_unset(s, "BR2_KERNEL_HEADERS_LATEST")
 
     # Mosquitto: the browser needs the WebSocket listener. Buildroot's built-in
     # implementation avoids pulling libwebsockets into the image.
