@@ -134,7 +134,7 @@ docker run \
     -e BR2_DL_DIR="/root/buildroot-${BUILD_ROOT_RELEASE}/dl" \
     -e CCACHE_CONFIGPATH=/config/ccache.conf \
     "${BUILD_ROOT_TAG}" \
-    -c "make -j \$(( \$(nproc) + 1 )) -l \$(( \$(nproc) + 1 )) STATIC=1 oldconfig && FORCE_UNSAFE_CONFIGURE=1 make -j \$(( \$(nproc) + 1 )) -l \$(( \$(nproc) + 1 )) STATIC=1 && python3 /tools/compress-filesystem.py /build/filesystem; rc=\$?; echo '== ccache =='; /root/buildroot-${BUILD_ROOT_RELEASE}/output/host/bin/ccache -s || true; exit \$rc"
+    -c "make -j \$(( \$(nproc) + 1 )) -l \$(( \$(nproc) + 1 )) STATIC=1 oldconfig && sh /config/board/minecraft/fix-toolchain-headers.sh .config && FORCE_UNSAFE_CONFIGURE=1 make -j \$(( \$(nproc) + 1 )) -l \$(( \$(nproc) + 1 )) STATIC=1 && python3 /tools/compress-filesystem.py /build/filesystem; rc=\$?; echo '== ccache =='; /root/buildroot-${BUILD_ROOT_RELEASE}/output/host/bin/ccache -s || true; exit \$rc"
 rc=$?
 elapsed=$(( $(date +%s) - start ))
 echo "== ${BOARD} build finished in ${elapsed}s (exit ${rc}) =="
