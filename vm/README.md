@@ -194,3 +194,28 @@ Verified 2026-11-01 during the Minecraft image build:
   `config/ccache.conf` now sets `compiler_check = content`; the next image build
   has stable compiler keys. `build2026-minecraft.sh` now prints `ccache -s` and
   the Redis counters at the end so this cannot pass unnoticed again.
+
+## Validated build — 2026-11-02
+
+The ccache/Redis rebuild finished cleanly:
+
+```
+build finished in 13130s (exit 0)
+ccache: PASS (keys +4832, commands +48561, hits +3038)
+payload 226M · filesystem.json 1010K
+```
+
+`vm/validate.sh` cold-booted that payload on relay 8891 / HTTP 18456:
+
+```
+guest shell ready after 192s
+lynx RC: 0
+state 872,328,976 bytes raw → 61,687,090 bytes zst
+zst sha256 4133d1b88bcfed052996ea62d7a4d6d483fbe8cf179e13c0df1e1279cbc1e48d
+```
+
+The warm state is staged at `vm/runtime/state/v86state.bin.zst` with
+`default.json`. That directory is git-ignored; the hashes above are the durable
+record. `ccache -s` still reports remote hits 1/132,627 even though Redis shows
+traffic — the gate prevents silent cold builds, but remote key reuse remains a
+tuning item.
