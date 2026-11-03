@@ -195,56 +195,49 @@ Verified 2026-11-01 during the Minecraft image build:
   has stable compiler keys. `build2026-minecraft.sh` now prints `ccache -s` and
   the Redis counters at the end so this cannot pass unnoticed again.
 
-## Validated build — 2026-11-02
+## Validated build — kernel 7.2.3
 
-The ccache/Redis rebuild finished cleanly:
-
-```
-build finished in 13130s (exit 0)
-ccache: PASS (keys +4832, commands +48561, hits +3038)
-payload 226M · filesystem.json 1010K
-```
-
-`vm/validate.sh` cold-booted that payload on relay 8891 / HTTP 18456:
+The CVE-2026-98432 rebuild finished cleanly:
 
 ```
-guest shell ready after 192s
+build finished in 12734s (exit 0)
+ccache: PASS (keys +3824, commands +28980, hits +3920)
+payload 223M
+WARNING: no hash file for linux-7.2.3.tar.xz
+```
+
+Validation on relay 8891 / HTTP 18456:
+
+```
+guest shell ready after 93s
+guest kernel: 7.2.3
 lynx RC: 0
-state 872,328,976 bytes raw → 61,687,090 bytes zst
-zst sha256 4133d1b88bcfed052996ea62d7a4d6d483fbe8cf179e13c0df1e1279cbc1e48d
+state 894,500,412 bytes raw → 42,640,083 bytes zst
+zst sha256 f7af6f3dc756e29b82fa4ea4aa402531b1e4f1df242378e629b9f8abb7a152ea
 ```
+
+### 9p exec fix
+
+Kernel 7.2 refuses to execute `/sbin/init` from a 9p root mounted with
+`cache=loose`:
+
+```
+VFS: Mounted root (9p filesystem)
+Starting init: /sbin/init exists but couldn't execute it (error -13)
+Kernel panic - not syncing: No working init found
+```
+
+`exec,access=any` did not help. Removing `cache=loose` does:
+
+```
+rootflags=version=9p2000.L,trans=virtio
+```
+
+`vm/patch-page-kernel.py` strips the option from the runtime page, and
+`WorkAgent/VMResources/index.html` is updated on the `age-of-intellect` branch.
+7.2.10 was built cleanly but not re-validated after this fix; 7.2.3 is the
+validated production kernel.
 
 The warm state is staged at `vm/runtime/state/v86state.bin.zst` with
-`default.json`. That directory is git-ignored; the hashes above are the durable
-record. `ccache -s` still reports remote hits 1/132,627 even though Redis shows
-traffic — the gate prevents silent cold builds, but remote key reuse remains a
-tuning item.
-
-## Kernel 7.2.10 — CVE-2026-98432
-
-The guest moved from 7.0.14/7.1.13 to **7.2.10**. The flaw is a use-after-free in
-the ordinary IPv4 TCP handshake, not an MPTCP bug; MPTCP off does not avoid it.
-The kernel bump is the fix. Defence in depth:
-
-- `board/minecraft/linux.conf`: `# CONFIG_MPTCP is not set`
-- `rootfs_overlay/etc/sysctl.d/90-no-mptcp.conf`: `net.mptcp.enabled = 0`
-
-**Buildroot 2026.08.1 aborts on legacy symbols** (`Makefile.legacy`). The base
-`config-buildroot-2026.08.1` and `-debug` carried 909 symbols from older
-Buildroot releases, and `patch-defconfig.py` copied them into the minecraft
-config. Strip every symbol named in `Config.in.legacy` from the base configs
-before regenerating:
-
-```sh
-docker run --rm --entrypoint sh buildroot2026-minecraft -c \
-  "grep -o '^config BR2_[A-Z0-9_]*' /root/buildroot-2026.08.1/Config.in.legacy | awk '{print $2}'" \
-  > /tmp/legacy_syms.txt
-# remove those lines (and BR2_LEGACY) from config-buildroot-2026.08.1{,-debug}
-python3 config/board/minecraft/patch-defconfig.py
-```
-
-Then build:
-
-```sh
-./build2026-minecraft.sh --require-ccache
-```
+`default.json`. `vm/runtime` is git-ignored; the hashes above are the durable
+record.
