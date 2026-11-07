@@ -22,30 +22,68 @@ INIT="$STATE/init.json"
 TOKEN_FILE="$STATE/root-token"
 export VAULT_ADDR=http://127.0.0.1:8200
 
+init_valid() {
+    f="${1:-$INIT}"
+    [ -s "$f" ] || return 1
+    python3 - "$f" <<'PY' >/dev/null 2>&1
+import json, sys
+data = json.load(open(sys.argv[1]))
+assert data["root_token"]
+assert data["unseal_keys_b64"][0]
+PY
+}
+
 start_vault() {
     mkdir -p "$STATE/data" /var/log
     chmod 700 "$STATE"
+
+    # **An invalid init file used to be permanent.** The first failed
+    # `vault operator init` left a 665-byte non-JSON file, and every later boot
+    # skipped initialisation because the file existed; the server was then
+    # initialized-but-sealed forever. Validate before starting. A missing key
+    # next to non-empty storage is unrecoverable by design, so move that storage
+    # aside and start a fresh demo store rather than serving a sealed one.
+    if [ -f "$INIT" ] && ! init_valid; then
+        echo "invalid init file; moving the old file aside"
+        mv "$INIT" "$INIT.bad.$(date +%s)" 2>/dev/null || rm -f "$INIT"
+    fi
+    if [ ! -f "$INIT" ] && [ -d "$STATE/data" ] && [ -n "$(ls -A "$STATE/data" 2>/dev/null)" ]; then
+        echo "no unseal key for existing storage; moving data aside"
+        mv "$STATE/data" "$STATE/data.bad.$(date +%s)" 2>/dev/null || true
+        mkdir -p "$STATE/data"
+    fi
+
     start-stop-daemon -S -q -b -m -p "$PID" -x "$DAEMON" -- \
         server -config="$CONFIG" >>"$LOG" 2>&1
 
+    # `vault status` exits 2 while sealed, so its exit status is not the
+    # readiness signal. Wait for the status text, then init/unseal.
     i=0
     while [ "$i" -lt 30 ]; do
-        if "$DAEMON" status >/dev/null 2>&1; then break; fi
+        if "$DAEMON" status 2>&1 | grep -q "Initialized"; then break; fi
         i=$((i + 1))
         sleep 1
     done
 
     if [ ! -f "$INIT" ]; then
+        tmp="$INIT.tmp"
         "$DAEMON" operator init -key-shares=1 -key-threshold=1 -format=json \
-            >"$INIT" 2>>"$LOG" || {
+            >"$tmp" 2>>"$LOG" || {
+            rm -f "$tmp"
             echo "FAIL (init; see $LOG)"
             return 1
         }
+        if ! init_valid "$tmp"; then
+            mv "$tmp" "$INIT.bad.init" 2>/dev/null || true
+            echo "FAIL (init output is not JSON; see $LOG)"
+            return 1
+        fi
+        mv "$tmp" "$INIT"
         chmod 600 "$INIT"
     fi
 
-    TOKEN=$(python3 -c 'import json;print(json.load(open("/var/lib/vault/init.json"))["root_token"])' 2>>"$LOG")
-    UNSEAL=$(python3 -c 'import json;print(json.load(open("/var/lib/vault/init.json"))["unseal_keys_b64"][0])' 2>>"$LOG")
+    TOKEN=$(INIT_PATH="$INIT" python3 -c 'import json,os;print(json.load(open(os.environ["INIT_PATH"]))["root_token"])' 2>>"$LOG")
+    UNSEAL=$(INIT_PATH="$INIT" python3 -c 'import json,os;print(json.load(open(os.environ["INIT_PATH"]))["unseal_keys_b64"][0])' 2>>"$LOG")
     if [ -z "$TOKEN" ] || [ -z "$UNSEAL" ]; then
         echo "FAIL (init file unreadable)"
         return 1
@@ -53,19 +91,21 @@ start_vault() {
     printf '%s\n' "$TOKEN" >"$TOKEN_FILE"
     chmod 600 "$TOKEN_FILE"
 
-    # `vault status` returns non-zero while sealed; unseal is idempotent.
-    if ! "$DAEMON" status >/dev/null 2>&1; then
-        "$DAEMON" operator unseal "$UNSEAL" >>"$LOG" 2>&1 || {
-            echo "FAIL (unseal; see $LOG)"
-            return 1
-        }
-    fi
+    # Unseal is idempotent; a sealed server must be unsealed before the mount.
+    "$DAEMON" operator unseal "$UNSEAL" >>"$LOG" 2>&1 || {
+        echo "FAIL (unseal; see $LOG)"
+        return 1
+    }
 
-    # KV v2 at secret/ is the game-state path. It exists after the first boot;
-    # re-running enable is harmless but noisy, so ignore the already-exists case.
+    # KV v2 at secret/ is the game-state path. Enable after unseal; an already
+    # enabled mount returns an error that is safe to ignore.
     VAULT_TOKEN="$TOKEN" "$DAEMON" secrets enable -path=secret kv-v2 \
         >>"$LOG" 2>&1 || true
 
+    if "$DAEMON" status 2>&1 | grep -q "Sealed.*true"; then
+        echo "FAIL (still sealed; see $LOG)"
+        return 1
+    fi
     echo "OK (file backend; user state at secret/nautilus/game)"
     return 0
 }

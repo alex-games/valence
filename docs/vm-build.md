@@ -73,6 +73,13 @@ present.
 The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
 binary (timestamp 06:20) and contains the per-player Vault paths.
 
+**Third build (S47 fix):** the in-guest check found Vault `Initialized true` but
+`Sealed true` because `init.json` was a non-JSON file from a failed init and the
+old script skipped re-init. `S47vault` now validates the file, moves invalid
+init/keyless storage aside, writes through a temp file, unseals and checks
+`Sealed false`. This build is required before the captured state can be a valid
+user-state checkpoint.
+
 ## 4. What the image now persists
 
 - `/var/lib/vault/data` — file-backend Vault; per-player game state at
