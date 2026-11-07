@@ -1,28 +1,40 @@
 #!/bin/sh
 #
-# The single static game origin. nginx owns :80/:8080 and the MQTT websocket;
-# this process owns the Postgres-backed assets and the MQTT bridge.
+# The Valence game origin: the Minecraft protocol, the WebView page and the
+# embedded gameAssistant. nginx owns :80/:8080 and the MQTT websocket; this
+# process owns the world, /api/* and the MQTT C2 bridge.
 #
-PID=/var/run/minecraft.pid
-LOG=/var/log/minecraft.log
+# Persistence: Vault (file backend) is the authoritative user state, PostgreSQL
+# is the sidechain, and both live under /var/lib so the warm-boot snapshot
+# carries them.
+#
+PID=/var/run/nautilus-craft.pid
+LOG=/var/log/nautilus-craft.log
+BIN=/usr/bin/minecraft-server
 
 case "$1" in
   start)
-    printf "Starting minecraft-server: "
-    # The game server reads the Vault root token from the guest's file backend.
-    # Setting it before start-stop-daemon makes it part of the child environment;
-    # the token itself never appears in a log line.
+    printf "Starting nautilus-craft: "
+    mkdir -p /var/lib/nautilus /var/log
+    # The file-backend Vault token is written by S47vault. The token itself is
+    # never echoed; only the environment inherits it.
     if [ -r /var/lib/vault/root-token ]; then
-        NC_VAULT_TOKEN=$(cat /var/lib/vault/root-token)
-        VAULT_TOKEN=$NC_VAULT_TOKEN
-        export NC_VAULT_TOKEN VAULT_TOKEN
+        VAULT_TOKEN=$(cat /var/lib/vault/root-token)
+        export VAULT_TOKEN
     fi
-    start-stop-daemon -S -q -b -m -p "$PID" -x /bin/sh -- \
-        -c "exec /usr/bin/minecraft-server --addr 127.0.0.1:8081 >>$LOG 2>&1" || echo "FAIL"
+    NAUTILUS_WEB_ADDR=127.0.0.1:8081 \
+    NAUTILUS_MC_ADDR=127.0.0.1:25565 \
+    NAUTILUS_STATE=/var/lib/nautilus/state.json \
+    NAUTILUS_AUDIT=/var/lib/nautilus/audit.jsonl \
+    NAUTILUS_MQTT=127.0.0.1:1883 \
+    NAUTILUS_MQTT_ID=nautilus-craft \
+    NAUTILUS_MQTT_ROOT=wa/v1/c2/torrance \
+    VAULT_ADDR=http://127.0.0.1:8200 \
+    start-stop-daemon -S -q -b -m -p "$PID" -x "$BIN" -- >>"$LOG" 2>&1 || echo "FAIL"
     echo "OK"
     ;;
   stop)
-    printf "Stopping minecraft-server: "
+    printf "Stopping nautilus-craft: "
     start-stop-daemon -K -q -p "$PID" 2>/dev/null || true
     echo "OK"
     ;;

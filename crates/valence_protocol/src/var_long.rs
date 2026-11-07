@@ -45,14 +45,11 @@ impl VarLong {
 impl Encode for VarLong {
     // Adapted from VarInt-Simd encode
     // https://github.com/as-com/varint-simd/blob/0f468783da8e181929b01b9c6e9f741c1fe09825/src/encode/mod.rs#L71
-    #[cfg(all(
-        any(target_arch = "x86", target_arch = "x86_64"),
-        not(target_os = "macos")
-    ))]
+    // `_pdep_u64` is an x86_64 BMI2 intrinsic. The original cfg also selected
+    // this path for 32-bit x86 (the i686 guest), where the intrinsic does not
+    // exist and the build fails at `_pdep_u64`. Use the scalar encoder there.
+    #[cfg(all(target_arch = "x86_64", not(target_os = "macos")))]
     fn encode(&self, mut w: impl Write) -> anyhow::Result<()> {
-        #[cfg(target_arch = "x86")]
-        use std::arch::x86::*;
-        #[cfg(target_arch = "x86_64")]
         use std::arch::x86_64::*;
 
         // Break the number into 7-bit parts and spread them out into a vector
@@ -94,10 +91,7 @@ impl Encode for VarLong {
         Ok(())
     }
 
-    #[cfg(any(
-        not(any(target_arch = "x86", target_arch = "x86_64")),
-        target_os = "macos"
-    ))]
+    #[cfg(any(not(target_arch = "x86_64"), target_os = "macos"))]
     fn encode(&self, mut w: impl Write) -> anyhow::Result<()> {
         use byteorder::WriteBytesExt;
 
