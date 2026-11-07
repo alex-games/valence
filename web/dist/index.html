@@ -2519,6 +2519,60 @@ document.querySelectorAll('#actions button').forEach((b) => {
   b.addEventListener('pointerleave', up);
 });
 
+// ------------------------------------------------------- native controller ---
+// The WKWebView host owns the native sticks and buttons (see
+// WorkAgent/Game/VirtualController.swift). It writes the same `joy` and held-action
+// state the on-page touch pad writes, so there is exactly one movement path.
+//
+// This seam is also what Playwright drives: `window.nautilusInput.state()` is a
+// stable read-only probe, and `assist(text)` is the same closed router the voice
+// transcript enters. A harness does not need to know where the HUD lives.
+function nativeAction(act, down) {
+  if (act === 'jump') jumpHeld = down;
+  else if (act === 'break') breakHeld = down;
+  else if (act === 'place') placeHeld = down;
+  else if (act === 'fly' && down) { player.fly = !player.fly; player.vy = 0; toast(player.fly ? 'FLY ON' : 'FLY OFF'); }
+  else if (act === 'interact' && down) {
+    if (dialogueNPC) advanceDialogue();
+    else if (nearBiz && !state.farmed.includes(nearBiz.id)) beginClaim(nearBiz);
+    else if (nearNPC) openDialogue(nearNPC);
+  }
+}
+window.nautilusInput = {
+  move(x, y) {
+    const mx = clamp(Number(x) || 0, -1, 1);
+    const my = clamp(Number(y) || 0, -1, 1);
+    joy.id = (Math.abs(mx) + Math.abs(my) > 0.001) ? -1 : null;
+    joy.x = mx;
+    joy.y = my;
+  },
+  look(dx, dy) {
+    player.yaw -= (Number(dx) || 0) * 0.0023;
+    player.pitch = clamp(player.pitch - (Number(dy) || 0) * 0.0023, -1.45, 1.45);
+  },
+  press: nativeAction,
+  hotbar(i) { if (Number.isInteger(i) && i >= 0 && i < HOTBAR.length) selectSlot(i); },
+  assist(text) { return assistantIntent(String(text || '')); },
+  interact() { nativeAction('interact', true); },
+  state() {
+    return {
+      ready: true, mode: window.__NAUTILUS_SERVER__ ? 'server' : 'solo',
+      x: player.x, y: player.y, z: player.z, yaw: player.yaw, pitch: player.pitch,
+      quests: questCount(), questTotal: QUESTS.length,
+      tokens: tokenCount(), tokenTotal: TOKENS.length,
+      placed: state.placed, broken: state.broken,
+      nearNpc: nearNPC ? nearNPC.name : null,
+      nearBusiness: nearBiz ? nearBiz.name : null,
+      dialogue: dialogueNPC ? dialogueNPC.name : null
+    };
+  },
+  serverProgress() {
+    return fetch('/api/progress?player=' + encodeURIComponent((NET && NET.pid) || 'webview') +
+      '&x=' + player.x + '&y=' + player.y + '&z=' + player.z)
+      .then((r) => r.ok ? r.json() : null).catch(() => null);
+  }
+};
+
 // --------------------------------------------------------------------- UI ----
 const HOTBAR = (Array.isArray(WORLD.palette) && WORLD.palette.length ? WORLD.palette : FALLBACK_WORLD.palette)
   .map((n) => NAME_TO_ID[String(n).toLowerCase()])
@@ -4585,8 +4639,39 @@ function assistantIntent(text) {
   appendChat('ASSISTANT', reply, false, true);
   toast(reply.toUpperCase().slice(0, 120), 3400);
   speak(reply);
+  if (window.__NAUTILUS_SERVER__) serverAssistant(low);
   return reply;
 }
+// The Valence process is the authoritative board. The WebView applies the
+// server's *additions* (a quest it saw complete, a token it logged) but never
+// lets the server downgrade local play. That keeps solo/offline play intact.
+function serverAssistant(text) {
+  fetch('/api/assistant', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      player: (NET && NET.pid) || 'webview',
+      text,
+      pos: [player.x, player.y, player.z]
+    })
+  }).then((r) => r.ok ? r.json() : null).then((data) => {
+    if (!data || !data.progress) return;
+    applyServerProgress(data.progress);
+    if (data.action && data.action.kind === 'waypoint') {
+      toast(('WAYPOINT · ' + data.action.label).toUpperCase().slice(0, 100), 2600);
+    }
+  }).catch(() => {});
+}
+function applyServerProgress(p) {
+  if (!p) return;
+  for (const [id, done] of Object.entries(p.quests || {})) if (done) state.quests[id] = 1;
+  for (const id of p.tokens || []) if (!state.tokens.includes(id)) state.tokens.push(id);
+  if (typeof p.placed === 'number') state.placed = Math.max(state.placed, p.placed);
+  if (typeof p.broken === 'number') state.broken = Math.max(state.broken, p.broken);
+  renderQuests();
+  saveSoon();
+}
+window.applyServerProgress = applyServerProgress;
 function padAction(id) {
   if (id === 'assist') return startAssist();
   if (id === 'claim') {
