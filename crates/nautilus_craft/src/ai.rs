@@ -298,6 +298,10 @@ impl PlayerState {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct Persisted {
     version: u32,
+    /// Monotonic state revision, written to the Vault index. The whole-state blob
+    /// and the per-player keys are written from the same revision.
+    #[serde(default)]
+    revision: u64,
     players: BTreeMap<String, PlayerState>,
     audit: Vec<AuditRow>,
 }
@@ -332,6 +336,38 @@ pub enum Intent {
     Unknown,
 }
 
+const VAULT_INDEX: &str = "secret/data/nautilus/game/index";
+const VAULT_AUDIT: &str = "secret/data/nautilus/game/audit";
+
+fn vault_player_path(pid: &str) -> String {
+    let safe: String = pid
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect();
+    format!("secret/data/nautilus/players/{safe}/state")
+}
+
+fn load_players_from_vault(vault: &VaultStateStore) -> Option<Persisted> {
+    let index: serde_json::Value = serde_json::from_str(&vault.get_path(VAULT_INDEX)?).ok()?;
+    let mut players = BTreeMap::new();
+    for pid in index.get("players")?.as_array()? {
+        let pid = pid.as_str()?;
+        let raw = vault.get_path(&vault_player_path(pid))?;
+        let state: PlayerState = serde_json::from_str(&raw).ok()?;
+        players.insert(pid.to_owned(), state);
+    }
+    let audit = vault
+        .get_path(VAULT_AUDIT)
+        .and_then(|raw| serde_json::from_str::<Vec<AuditRow>>(&raw).ok())
+        .unwrap_or_default();
+    Some(Persisted {
+        version: 1,
+        revision: index.get("revision").and_then(|v| v.as_u64()).unwrap_or(0),
+        players,
+        audit,
+    })
+}
+
 pub struct Assistant {
     level: Level,
     data: Persisted,
@@ -355,15 +391,18 @@ impl Assistant {
             .or_else(|| Some(PathBuf::from("nautilus-audit.jsonl")));
         let mut assistant = Self::with_paths(level, state_path, audit_path);
         if let Some(vault) = VaultStateStore::from_env() {
-            if let Some(raw) = vault.load() {
-                match serde_json::from_str::<Persisted>(&raw) {
-                    Ok(loaded) if loaded.version == 1 => {
-                        eprintln!("[ai] loaded user game state from Vault");
-                        assistant.data = loaded;
-                    }
-                    Ok(_) => eprintln!("[ai] Vault state has an unknown version"),
-                    Err(e) => eprintln!("[ai] Vault state is unreadable: {e}"),
-                }
+            let loaded = vault
+                .load()
+                .and_then(|raw| serde_json::from_str::<Persisted>(&raw).ok())
+                .filter(|state| state.version == 1)
+                .or_else(|| load_players_from_vault(&vault));
+            if let Some(loaded) = loaded {
+                eprintln!(
+                    "[ai] loaded {} player(s) from Vault revision {}",
+                    loaded.players.len(),
+                    loaded.revision
+                );
+                assistant.data = loaded;
             }
             assistant.vault = Some(vault);
         }
@@ -378,6 +417,7 @@ impl Assistant {
     fn with_paths(level: Level, state_path: Option<PathBuf>, audit_path: Option<PathBuf>) -> Self {
         let mut data = Persisted {
             version: 1,
+            revision: 0,
             players: BTreeMap::new(),
             audit: Vec::new(),
         };
@@ -1626,7 +1666,8 @@ impl Assistant {
         }
     }
 
-    fn save(&self) {
+    fn save(&mut self) {
+        self.data.revision = self.data.revision.saturating_add(1);
         let Ok(raw) = serde_json::to_string_pretty(&self.data) else {
             return;
         };
@@ -1639,6 +1680,26 @@ impl Assistant {
         if let Some(vault) = &self.vault {
             if !vault.save(&raw) {
                 eprintln!("[ai] Vault write failed; local state file remains the mirror");
+            }
+            // Per-player keys are the authoritative state; the whole blob above is
+            // the compatibility mirror and the fastest boot path.
+            let mut ids = Vec::with_capacity(self.data.players.len());
+            for (pid, player) in &self.data.players {
+                if let Ok(state) = serde_json::to_string(player) {
+                    if vault.put_path(&vault_player_path(pid), &state).is_none() {
+                        eprintln!("[ai] Vault write failed for player {pid}");
+                    }
+                }
+                ids.push(pid.clone());
+            }
+            let index = serde_json::json!({
+                "revision": self.data.revision,
+                "players": ids,
+            })
+            .to_string();
+            let _ = vault.put_path(VAULT_INDEX, &index);
+            if let Ok(audit) = serde_json::to_string(&self.data.audit) {
+                let _ = vault.put_path(VAULT_AUDIT, &audit);
             }
         }
     }
@@ -2161,6 +2222,45 @@ mod tests {
         assert!(request.starts_with("POST /v1/secret/data/nautilus/game/assistant HTTP/1.1"));
         assert!(request.contains("\"state\":"));
         assert!(request.contains("vault-user"));
+    }
+
+    #[test]
+    fn loads_per_player_state_from_the_vault_index() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            for _ in 0..3 {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut buf = [0u8; 8192];
+                let n = stream.read(&mut buf).unwrap();
+                let request = String::from_utf8_lossy(&buf[..n]).to_string();
+                let (state, version) = if request.contains("/nautilus/game/index") {
+                    (r#"{"revision":3,"players":["p1"]}"#, 4u64)
+                } else if request.contains("/players/p1/state") {
+                    (r#"{"name":"p1","quests":{},"tokens":[],"inventory":{},"credits":1000,"sats":0,"placed":0,"broken":0,"focus":"explore","day":0,"daily_done":false,"finished":false,"farmed":{},"waypoint":null}"#, 2u64)
+                } else {
+                    ("[]", 1u64)
+                };
+                let body = serde_json::json!({
+                    "data": { "data": { "state": state }, "version": version }
+                })
+                .to_string();
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(response.as_bytes());
+            }
+        });
+        let vault = VaultStateStore::test_store("127.0.0.1", port);
+        let loaded = load_players_from_vault(&vault).expect("index + player + audit");
+        assert_eq!(loaded.revision, 3);
+        assert_eq!(loaded.players.len(), 1);
+        assert_eq!(loaded.players["p1"].name, "p1");
     }
 
     #[test]

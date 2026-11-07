@@ -56,25 +56,31 @@ impl VaultStateStore {
     }
 
     pub fn load(&self) -> Option<String> {
-        let body = self.request("GET", None)?;
-        let value: serde_json::Value = serde_json::from_str(&body).ok()?;
-        value
-            .get("data")?
-            .get("data")?
-            .get("state")?
-            .as_str()
-            .map(str::to_owned)
+        self.get_path(&self.path)
     }
 
     pub fn save(&self, state_json: &str) -> bool {
+        self.put_path(&self.path, state_json).is_some()
+    }
+
+    /// Read `state` from an arbitrary KV v2 path.
+    pub fn get_path(&self, path: &str) -> Option<String> {
+        let body = self.request_at("GET", path, None)?;
+        parse_state(&body)
+    }
+
+    /// Write `state` to an arbitrary KV v2 path. Returns the new Vault version.
+    pub fn put_path(&self, path: &str, state_json: &str) -> Option<u64> {
         let body = serde_json::json!({
             "data": { "state": state_json }
         })
         .to_string();
-        self.request("POST", Some(&body)).is_some()
+        let response = self.request_at("POST", path, Some(&body))?;
+        let value: serde_json::Value = serde_json::from_str(&response).ok()?;
+        value.get("data")?.get("version")?.as_u64()
     }
 
-    fn request(&self, method: &str, body: Option<&str>) -> Option<String> {
+    fn request_at(&self, method: &str, path: &str, body: Option<&str>) -> Option<String> {
         let mut stream = TcpStream::connect((self.host.as_str(), self.port)).ok()?;
         stream.set_read_timeout(Some(Duration::from_secs(3))).ok()?;
         stream
@@ -85,7 +91,7 @@ impl VaultStateStore {
             "{method} /v1/{} HTTP/1.1\r\nHost: {}:{}\r\nX-Vault-Token: {}\r\n\
              Content-Type: application/json\r\nContent-Length: {}\r\n\
              Connection: close\r\n\r\n{body}",
-            self.path.trim_start_matches('/'),
+            path.trim_start_matches('/'),
             self.host,
             self.port,
             self.token,
@@ -104,6 +110,16 @@ impl VaultStateStore {
         }
         Some(String::from_utf8_lossy(&response[split..]).to_string())
     }
+}
+
+fn parse_state(body: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(body).ok()?;
+    value
+        .get("data")?
+        .get("data")?
+        .get("state")?
+        .as_str()
+        .map(str::to_owned)
 }
 
 fn parse_addr(addr: &str) -> Option<(String, u16)> {
