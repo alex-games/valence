@@ -62,11 +62,23 @@ The build creates `build-2026-minecraft/filesystem` and its runtime payload.
 `post-build.sh` refuses a non-i386 ELF and checks `etc/vault/vault.hcl` is
 present.
 
+## Build result
+
+| Build | When | Duration | Result |
+|---|---|---|---|
+| file-backend Vault + Valence origin | 2026-11-07 | 11,826 s | exit 0, 226 MB, 12,540 blobs |
+| per-player Vault state + revision | 2026-11-07 | 11,855 s | exit 0, 226 MB, 12,540 blobs |
+| cold boot | 2026-11-07 | — | 830 MB raw / 42 MB zst state |
+
+The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
+binary (timestamp 06:20) and contains the per-player Vault paths.
+
 ## 4. What the image now persists
 
-- `/var/lib/vault/data` — file-backend Vault; user game state and wallet
-  secrets. S47 initialises once, stores the unseal key/root token `0600`, and
-  re-unseals on boot.
+- `/var/lib/vault/data` — file-backend Vault; per-player game state at
+  `secret/data/nautilus/players/<pid>/state`, the index/revision, the audit and
+  wallet secrets. S47 initialises once, stores the unseal key/root token `0600`,
+  and re-unseals on boot.
 - `/var/lib/pgsql` — PostgreSQL sidechain (`game_edits`, `game_accounts`,
   `game_side_blocks`, `game_anchors`).
 - Both are under `/var/lib` and therefore in the warm-boot snapshot.
@@ -80,7 +92,8 @@ from `/var/lib/vault/root-token` in the guest.
 # in the guest
 wget -qO- http://127.0.0.1/healthz
 vault status
-VAULT_TOKEN=$(cat /var/lib/vault/root-token) vault kv get secret/nautilus/game/assistant
+VAULT_TOKEN=$(cat /var/lib/vault/root-token) vault kv get secret/nautilus/game/index
+VAULT_TOKEN=$(cat /var/lib/vault/root-token) vault kv get secret/nautilus/players/<pid>/state
 su - postgres -c "psql -d nautilus_craft -c '\\dt'"
 ```
 
