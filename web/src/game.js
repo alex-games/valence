@@ -3380,12 +3380,53 @@ function speak(text) {
     speechSynthesis.speak(u);
   } catch (e) {}
 }
+// The local half of the closed router. It mirrors the Valence `next`, `status`
+// and `daily` tools when the page is solo or the server is unreachable, so the
+// ASSIST button is useful before any guest or broker exists.
+function nextStepReply() {
+  const open = QUESTS.filter((q) => !qDone(q));
+  if (!open.length) return 'Every beginner quest is complete. The freebuild plot and the market are open.';
+  let best = null;
+  for (const q of open) {
+    let d = 0;
+    if (q.zone) d = Math.hypot(player.x - q.zone.x, player.z - q.zone.z);
+    const remaining = q.kind === 'place' ? Math.max(0, q.target - state.placed)
+      : q.kind === 'break' ? Math.max(0, q.target - state.broken) : 0;
+    const step = { q, d, remaining };
+    if (!best || d < best.d) best = step;
+  }
+  if (best.q.zone) {
+    return `Next: ${best.q.title}. ${Math.round(best.d)} blocks away. I marked it; the walking is yours.`;
+  }
+  return `Next: ${best.q.title}. ${best.remaining} to go.`;
+}
+function statusReply() {
+  return `${questCount()} of ${QUESTS.length} quests, ${tokenCount()} of ${TOKENS.length} tokens, `
+    + `${state.credits} credits, ${state.sats} sats. Focus ${state.goal}. ${nextStepReply()}`;
+}
+function dailyReply() {
+  const before = questCount();
+  checkQuests();
+  collectTokens();
+  const gained = questCount() - before;
+  return (gained ? `Daily pass complete: ${gained} quest(s) finished. ` : 'Daily pass complete. ')
+    + statusReply();
+}
 function assistantIntent(text) {
   const low = String(text || '').toLowerCase().trim();
   if (!low) return '';
   let reply = '';
   let m;
-  if ((m = /create (?:a |an )?(settler|worker|trader|scholar|ranger|guard|diplomat|artisan)(?: named ([a-z0-9 ]{1,24}))?/.exec(low))) {
+  if (/^(next|what should i do|what next|where do i go|guide me)$/.test(low)) {
+    reply = nextStepReply();
+  } else if (/^(status|report|how am i doing)$/.test(low)) {
+    reply = statusReply();
+  } else if (/^(run the day|daily|do the chores|run my day)$/.test(low)) {
+    reply = dailyReply();
+  } else if ((m = /^focus (food|farm|build|production|trade|gold|explore|social)$/.exec(low))) {
+    state.goal = m[1];
+    reply = `Focus set to ${m[1]}. I will rank the next step by it.`;
+  } else if ((m = /create (?:a |an )?(settler|worker|trader|scholar|ranger|guard|diplomat|artisan)(?: named ([a-z0-9 ]{1,24}))?/.exec(low))) {
     reply = createCitizen(m[1], (m[2] || m[1]).trim().replace(/\b\w/g, (c) => c.toUpperCase()));
     openPanel('citizens');
   } else if ((m = /(?:tell|guide|direct) the citizens? to (.+)/.exec(low))) {
