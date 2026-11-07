@@ -1478,7 +1478,19 @@ const state = {
   placed: 0,
   broken: 0,
   started: 0,
-  finished: false
+  finished: false,
+  // The local router's planning/receipt state. It mirrors the Valence fields
+  // so a solo page and the server give the same answers.
+  focusCounts: Object.create(null),
+  orders: [],
+  pendingOrder: null,
+  verbose: true,
+  lastReply: '',
+  lastBriefDay: 0,
+  lastHintDay: 0,
+  lastMoveAt: Date.now(),
+  lastPos: null,
+  dayStart: { credits: 3000, sats: 0, quests: 0, tokens: 0 }
 };
 const edits = new Map();
 const SAVE_KEY = 'nautilus-craft.torrance.v1';
@@ -1499,7 +1511,11 @@ function saveNow() {
       cohortStart: state.cohortStart, epochArchive: state.epochArchive,
       fog: state.fog, campaign: state.campaign, contracts: state.contracts, rep: state.rep, mer: state.mer,
       farmDay: state.farmDay, farmed: state.farmed, placed: state.placed, broken: state.broken,
-      started: state.started, finished: state.finished, edits: e
+      started: state.started, finished: state.finished,
+      focusCounts: state.focusCounts, orders: state.orders, pendingOrder: state.pendingOrder,
+      verbose: state.verbose, lastReply: state.lastReply,
+      lastBriefDay: state.lastBriefDay, lastHintDay: state.lastHintDay,
+      dayStart: state.dayStart, edits: e
     }));
   } catch (e) {}
 }
@@ -1541,6 +1557,15 @@ function loadSave() {
     state.farmed = Array.isArray(s.farmed) ? s.farmed.filter((x) => typeof x === 'string') : [];
     state.placed = s.placed | 0; state.broken = s.broken | 0;
     state.started = s.started | 0; state.finished = !!s.finished;
+    state.focusCounts = s.focusCounts && typeof s.focusCounts === 'object' ? s.focusCounts : Object.create(null);
+    state.orders = Array.isArray(s.orders) ? s.orders : [];
+    state.pendingOrder = s.pendingOrder && typeof s.pendingOrder === 'object' ? s.pendingOrder : null;
+    state.verbose = s.verbose !== false;
+    state.lastReply = typeof s.lastReply === 'string' ? s.lastReply : '';
+    state.lastBriefDay = s.lastBriefDay | 0;
+    state.lastHintDay = s.lastHintDay | 0;
+    state.dayStart = s.dayStart && typeof s.dayStart === 'object'
+      ? s.dayStart : { credits: state.credits, sats: state.sats, quests: 0, tokens: 0 };
     if (s.edits) for (const k of Object.keys(s.edits)) edits.set(k, s.edits[k] | 0);
     for (const [k, v] of edits) {
       const [x, y, z] = k.split(',').map(Number);
@@ -1663,7 +1688,17 @@ function npcDistance(n) {
 let nearBiz = null, pendingClaim = null;
 function ensureFarmDay() {
   const day = gameDay();
-  if (state.farmDay !== day) { state.farmDay = day; state.farmed = []; }
+  if (state.farmDay !== day) {
+    state.farmDay = day;
+    state.farmed = [];
+    state.lastHintDay = 0;
+    state.dayStart = {
+      credits: state.credits,
+      sats: state.sats,
+      quests: questCount(),
+      tokens: state.tokens.length
+    };
+  }
 }
 function farmDistance(b) { return Math.hypot(player.x - b.x, player.z - b.z); }
 function renderSats() { if (satsEl) satsEl.textContent = String(state.sats); }
@@ -1820,9 +1855,8 @@ function haversine(a, b, c, d) {
 }
 function beginClaim(b) {
   if (!b) return;
-  ensureFarmDay();
-  if (state.farmed.includes(b.id)) { toast('ALREADY FARMED TODAY · COME BACK TOMORROW', 2600); return; }
-  if (farmDistance(b) > 4.2) { toast('WALK TO ' + b.name.toUpperCase() + ' FIRST', 2600); return; }
+  const coach = photoCoach(b);
+  if (coach) { toast(coach.toUpperCase(), 3600); return; }
   pendingClaim = b;
   photoInput.value = '';
   photoInput.click();
@@ -2828,6 +2862,21 @@ function frame(now) {
     renderDay();
     if (questCount() > 0 && state.started === 0) { state.started = Date.now(); saveSoon(); }
   }
+  if (started) {
+    const now = Date.now();
+    const moved = !state.lastPos
+      || Math.hypot(player.x - state.lastPos[0], player.z - state.lastPos[1]) > 1.0;
+    if (moved) {
+      state.lastPos = [player.x, player.z];
+      state.lastMoveAt = now;
+    } else if (now - state.lastMoveAt > 180000 && state.lastHintDay !== gameDay()) {
+      state.lastHintDay = gameDay();
+      const hint = 'No progress for three minutes. Say route for the ordered loop or next for one step.';
+      appendChat('ASSISTANT', hint, false, true);
+      speak(hint);
+      saveSoon();
+    }
+  }
   saveTick += dt;
   if (saveTick > 5 && started) { saveTick = 0; saveNow(); }
 }
@@ -2975,6 +3024,12 @@ function startGame() {
   NET.name = sanitizeName(playerNameEl ? playerNameEl.value : NET.name);
   try { if (store) store.setItem('nc_name', NET.name); } catch (e) {}
   connectNet();
+  ensureFarmDay();
+  if (state.lastBriefDay !== gameDay()) {
+    const text = briefingReply();
+    appendChat('ASSISTANT', text, false, true);
+    speak(text);
+  }
   if (!IS_TOUCH) setTimeout(lockPointer, 80);
 }
 
@@ -3412,19 +3467,223 @@ function dailyReply() {
   return (gained ? `Daily pass complete: ${gained} quest(s) finished. ` : 'Daily pass complete. ')
     + statusReply();
 }
+// ---------------------------------------------------------- toil planner ---
+// The local route uses the same manifest and the same 4.2-block business rule
+// as the Valence planner. It is nearest-neighbour only; the server adds 2-opt.
+function localRoute() {
+  ensureFarmDay();
+  const stops = [];
+  const local = [];
+  for (const b of BUSINESSES) {
+    if (state.farmed.includes(b.id)) continue;
+    stops.push({ id: 'biz:' + b.id, label: b.name, kind: 'business', x: b.x, z: b.z,
+      sats: b.sats | 0, step: 'walk + photo' });
+  }
+  for (const t of TOKENS) {
+    if (state.tokens.includes(t.id)) continue;
+    stops.push({ id: 'token:' + t.id, label: t.id + ' token', kind: 'token',
+      x: t.x, z: t.z, sats: 5, step: 'walk' });
+  }
+  for (const q of QUESTS) {
+    if (qDone(q)) continue;
+    if (q.zone) {
+      stops.push({ id: 'quest:' + q.id, label: q.title, kind: 'quest',
+        x: q.zone.x, z: q.zone.z, sats: 15, step: 'walk into the zone' });
+    } else {
+      local.push({ id: 'quest:' + q.id, label: q.title, kind: 'quest',
+        x: player.x, z: player.z, sats: 15,
+        step: q.kind === 'place' ? `place ${q.target} blocks` : `break ${q.target} blocks` });
+    }
+  }
+  const ordered = [];
+  let cx = player.x, cz = player.z, walk = 0;
+  while (stops.length) {
+    let best = 0, bd = Infinity;
+    stops.forEach((s, i) => {
+      const d = Math.hypot(s.x - cx, s.z - cz);
+      if (d < bd) { bd = d; best = i; }
+    });
+    const stop = stops.splice(best, 1)[0];
+    stop.distance = bd;
+    walk += bd;
+    cx = stop.x; cz = stop.z;
+    ordered.push(stop);
+  }
+  ordered.push(...local);
+  return { stops: ordered, total: ordered.reduce((n, s) => n + s.sats, 0), walk };
+}
+function routeReply() {
+  const route = localRoute();
+  if (!route.stops.length) return 'The route is clear; every beginner quest is complete.';
+  const first = route.stops[0];
+  return `Route: ${route.stops.length} stop(s), ${route.total} sats, ${Math.round(route.walk)} blocks. `
+    + `First: ${first.label} (${Math.round(first.distance)} blocks, ${first.step}).`;
+}
+function briefingReply() {
+  ensureFarmDay();
+  const fresh = state.lastBriefDay !== gameDay();
+  state.lastBriefDay = gameDay();
+  const route = localRoute();
+  saveSoon();
+  if (!route.stops.length) return 'The board is clear; the freebuild plot is open.';
+  const first = route.stops[0];
+  return `${fresh ? 'New game day.' : "Today's board."} ${route.stops.length} stops, `
+    + `${route.total} sats, ${Math.round(route.walk)} blocks. First: ${first.label} `
+    + `(${Math.round(first.distance)} blocks, ${first.step}). Say route for the order.`;
+}
+function receiptReply() {
+  ensureFarmDay();
+  const d = state.dayStart;
+  return `Today: ${state.credits - d.credits >= 0 ? '+' : ''}${state.credits - d.credits} credits, `
+    + `${state.sats - d.sats >= 0 ? '+' : ''}${state.sats - d.sats} sats, `
+    + `${questCount() - d.quests} quest(s), ${tokenCount() - d.tokens} token(s), `
+    + `${state.orders.length} order(s) queued.`;
+}
+function merReply() {
+  const d = state.dayStart;
+  const faucets = (state.credits - d.credits) + (state.sats - d.sats);
+  const sinks = state.orders.filter((o) => o.side === 'buy').reduce((n, o) => n + o.qty * o.price, 0);
+  return `MER: faucets ${faucets >= 0 ? '+' : ''}${faucets}; buy-side queued ${sinks}; `
+    + `delta ${faucets - sinks}.`;
+}
+function compareReply() {
+  const left = QUESTS.filter((q) => !qDone(q)).length;
+  const businesses = BUSINESSES.filter((b) => !state.farmed.includes(b.id)).length;
+  const sats = BUSINESSES.filter((b) => !state.farmed.includes(b.id))
+    .reduce((n, b) => n + (b.sats | 0), 0);
+  const first = localRoute().stops[0];
+  return `Quests: ${left} left, ${left * 25} credits. Sats: ${businesses} businesses, ${sats} sats. `
+    + `Focus ${state.goal}; best next is ${first ? first.label : 'freebuild'}. `
+    + 'I would take the sats while the day is fresh, then the quest board.';
+}
+function parseLocalOrder(low) {
+  const words = low.split(/\s+/);
+  if (words[0] !== 'sell' && words[0] !== 'buy') return null;
+  const draft = { side: words[0], item: '', qty: 0, price: 0, region: 'garden' };
+  for (let i = 1; i < words.length; i++) {
+    const w = words[i];
+    if (/^\d+$/.test(w)) { if (!draft.qty) draft.qty = Number(w); else if (!draft.price) draft.price = Number(w); }
+    else if (['wheat', 'carrot', 'coffee', 'brick', 'token'].includes(w)) draft.item = w;
+    else if (['garden', 'park', 'market', 'dealer'].includes(w)) draft.region = w;
+    else if ((w === 'at' || w === 'for') && /^\d+$/.test(words[i + 1] || '')) {
+      draft.price = Number(words[++i]);
+    }
+  }
+  return draft.item ? draft : null;
+}
+function orderReply(low) {
+  const draft = parseLocalOrder(low);
+  if (!draft) return 'Say the order as sell 2 wheat at 11 in garden.';
+  if (!draft.qty) return `How many ${draft.item}? Say sell ${draft.item} at ${draft.price || 11}.`;
+  if (!draft.price) return `At what price? Say sell ${draft.qty} ${draft.item} at 11.`;
+  const total = draft.qty * draft.price;
+  if (total > 500) {
+    state.pendingOrder = draft;
+    saveSoon();
+    return `That is ${total} credits, over the 500-credit spoken cap. Say confirm order.`;
+  }
+  state.orders.push({ ...draft, status: 'queued', at: Date.now() });
+  saveSoon();
+  mqttPublish('commerce/order', { ...draft, pid: NET.pid || 'solo', at: Date.now() }, 1, false);
+  return `Queued ${draft.side} ${draft.qty} ${draft.item} at ${draft.price} in ${draft.region}; `
+    + 'the command centre settles it.';
+}
+function confirmReply() {
+  if (state.pendingOrder) {
+    const order = state.pendingOrder;
+    state.pendingOrder = null;
+    state.orders.push({ ...order, status: 'queued', at: Date.now() });
+    saveSoon();
+    mqttPublish('commerce/order', { ...order, pid: NET.pid || 'solo', at: Date.now() }, 1, false);
+    return `Confirmed: ${order.side} ${order.qty} ${order.item} at ${order.price} queued.`;
+  }
+  return 'Nothing is waiting for confirmation.';
+}
+function delegateReply(task) {
+  mqttPublish('cc/task', { task, pid: NET.pid || 'solo', at: Date.now() }, 1, false);
+  return `Delegated ${task} to the command centre. It will post a receipt; the walk, `
+    + 'the photo and the keys stay yours.';
+}
+function intentTool(text) {
+  const low = String(text || '').toLowerCase().trim();
+  const registry = window.__INTENTS__;
+  if (registry && Array.isArray(registry.intents)) {
+    for (const entry of registry.intents) {
+      if ((entry.phrases || []).includes(low)) return { id: entry.id, tool: entry.tool };
+    }
+  }
+  if (/^(sell|buy)\s/.test(low)) return { id: 'order', tool: 'game.order' };
+  if (/^focus\s/.test(low)) return { id: 'focus', tool: 'game.focus' };
+  if (/^quest\s/.test(low)) return { id: 'quest', tool: 'game.quest' };
+  if (/^(where is|where's|find|take me to|visit)\s/.test(low)) return { id: 'where', tool: 'game.where' };
+  if (/^talk to\s/.test(low)) return { id: 'talk', tool: 'game.talk' };
+  if (/^mark\s/.test(low)) return { id: 'mark', tool: 'game.mark' };
+  return { id: 'unknown', tool: null };
+}
+function shorten(text) {
+  const first = String(text || '').split('. ')[0];
+  return first.length > 120 ? first.slice(0, 117) + '...' : first;
+}
+function photoCoach(b) {
+  if (!b) return 'No business here.';
+  ensureFarmDay();
+  if (state.farmed.includes(b.id)) return `${b.name} is already farmed this game day.`;
+  const d = farmDistance(b);
+  if (d > 4.2) return `Walk closer: ${Math.round(d)} blocks from ${b.name}; the claim needs 4.2.`;
+  return null;
+}
 function assistantIntent(text) {
   const low = String(text || '').toLowerCase().trim();
   if (!low) return '';
   let reply = '';
   let m;
-  if (/^(next|what should i do|what next|where do i go|guide me)$/.test(low)) {
+  if (low === 'repeat' || low === 'say that again' || low === 'repeat that') {
+    reply = state.lastReply || 'Nothing to repeat yet.';
+  } else if (low === 'shorter' || low === 'be brief' || low === 'be concise' || low === 'less talk') {
+    state.verbose = false;
+    reply = 'Short answers from now on. Say verbose to restore detail.';
+  } else if (low === 'verbose') {
+    state.verbose = true;
+    reply = 'Detailed answers restored.';
+  } else if (/^(confirm|yes|do it|confirm order|ok)$/.test(low)) {
+    reply = confirmReply();
+  } else if (/^(no|cancel|never mind|nevermind)$/.test(low)) {
+    state.pendingOrder = null;
+    reply = 'Cancelled the pending action.';
+  } else if (/^(route|plan the loop|run the loop|best route|route today)$/.test(low)) {
+    reply = routeReply();
+  } else if (/^(brief|briefing|daily briefing|what is today)$/.test(low)) {
+    reply = briefingReply();
+  } else if (/^(receipt|daily receipt|how did today go|what did i earn)$/.test(low)) {
+    reply = receiptReply();
+  } else if (/^(mer|market metrics|faucet)$/.test(low)) {
+    reply = merReply();
+  } else if (/vs|versus|what is worth|best for credits|campaign or quests/.test(low)) {
+    reply = compareReply();
+  } else if (/^(delegate the market|let the cc handle the market|have the cc do the bookkeeping)$/.test(low)) {
+    reply = delegateReply('market bookkeeping');
+  } else if (/delegate citizens|let the cc handle the citizens/.test(low)) {
+    reply = delegateReply('citizen assignments');
+  } else if (/delegate contracts|let the cc handle the contracts/.test(low)) {
+    reply = delegateReply('contract paperwork');
+  } else if (/^(sell|buy)\s/.test(low)) {
+    reply = orderReply(low);
+  } else if (/^(next|what should i do|what next|where do i go|guide me)$/.test(low)) {
     reply = nextStepReply();
   } else if (/^(status|report|how am i doing)$/.test(low)) {
     reply = statusReply();
   } else if (/^(run the day|daily|do the chores|run my day)$/.test(low)) {
     reply = dailyReply();
+  } else if (low === 'focus auto') {
+    let best = state.goal, count = 0;
+    for (const [focus, n] of Object.entries(state.focusCounts || {})) {
+      if (n > count) { best = focus; count = n; }
+    }
+    state.goal = best;
+    reply = `Focus auto chose ${best} from your past commands.`;
   } else if ((m = /^focus (food|farm|build|production|trade|gold|explore|social)$/.exec(low))) {
     state.goal = m[1];
+    state.focusCounts[m[1]] = (state.focusCounts[m[1]] || 0) + 1;
     reply = `Focus set to ${m[1]}. I will rank the next step by it.`;
   } else if ((m = /create (?:a |an )?(settler|worker|trader|scholar|ranger|guard|diplomat|artisan)(?: named ([a-z0-9 ]{1,24}))?/.exec(low))) {
     reply = createCitizen(m[1], (m[2] || m[1]).trim().replace(/\b\w/g, (c) => c.toUpperCase()));
@@ -3479,11 +3738,14 @@ function assistantIntent(text) {
   } else {
     reply = 'I can create citizens, guide or plan them, deploy to a shard, open the market or relations, map, claim or talk.';
   }
+  if (!state.verbose) reply = shorten(reply);
+  state.lastReply = reply;
   mqttPublish('assistant/intent', { text: low, reply, pid: NET.pid || 'solo', at: Date.now() }, 1, false);
   appendChat('ASSISTANT', reply, false, true);
   toast(reply.toUpperCase().slice(0, 120), 3400);
   speak(reply);
   if (window.__NAUTILUS_SERVER__) serverAssistant(low);
+  saveSoon();
   return reply;
 }
 // The Valence process is the authoritative board. The WebView applies the
@@ -3567,6 +3829,17 @@ window.__nc = {
   get state() { return state; },
   get quests() { return QUESTS.map((q) => ({ id: q.id, done: !!state.quests[q.id] })); },
   get manifest() { return WORLD; },
+  get orders() { return state.orders.map((o) => ({ ...o })); },
+  get focusCounts() { return { ...state.focusCounts }; },
+  intent(text) { return intentTool(text); },
+  route() { return localRoute(); },
+  briefing() { return briefingReply(); },
+  receipt() { return receiptReply(); },
+  mer() { return merReply(); },
+  photoCoach(id) {
+    const b = BUSINESSES.find((x) => x.id === id);
+    return b ? photoCoach(b) : 'no business';
+  },
   teleport(x, z, y) {
     player.x = x + 0.5; player.z = z + 0.5;
     player.y = typeof y === 'number' ? y : GROUND + 1;

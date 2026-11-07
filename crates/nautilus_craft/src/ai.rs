@@ -42,16 +42,51 @@ pub enum Action {
         z: f64,
         label: String,
     },
+    Route {
+        stops: Vec<RouteStop>,
+        total_sats: i64,
+        walk_blocks: f64,
+    },
     Token {
         id: String,
         x: f64,
         y: f64,
         z: f64,
     },
+    Delegate {
+        task: String,
+        topic: String,
+    },
+    Order {
+        side: String,
+        item: String,
+        qty: i64,
+        price: i64,
+        region: String,
+    },
+    Receipt {
+        credits: i64,
+        sats: i64,
+        quests: usize,
+        tokens: usize,
+    },
     Pause {
         paused: bool,
     },
     Reset,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct RouteStop {
+    pub id: String,
+    pub label: String,
+    pub kind: String,
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+    pub sats: i64,
+    pub step: String,
+    pub distance: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -104,6 +139,38 @@ pub struct AuditRow {
     pub result: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DayStart {
+    #[serde(default)]
+    pub credits: i64,
+    #[serde(default)]
+    pub sats: i64,
+    #[serde(default)]
+    pub quests: usize,
+    #[serde(default)]
+    pub tokens: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+pub struct OrderDraft {
+    pub side: String,
+    pub item: String,
+    pub qty: i64,
+    pub price: i64,
+    pub region: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct QueuedOrder {
+    pub side: String,
+    pub item: String,
+    pub qty: i64,
+    pub price: i64,
+    pub region: String,
+    pub status: String,
+    pub at: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerState {
     pub name: String,
@@ -135,6 +202,30 @@ pub struct PlayerState {
     pub farmed: BTreeMap<String, i64>,
     #[serde(default)]
     pub waypoint: Option<[f64; 3]>,
+    #[serde(default)]
+    pub last_brief_day: i64,
+    #[serde(default)]
+    pub last_hint_day: i64,
+    #[serde(default)]
+    pub last_move_at: i64,
+    #[serde(default)]
+    pub last_pos: Option<[f64; 3]>,
+    #[serde(default)]
+    pub focus_counts: BTreeMap<String, i64>,
+    #[serde(default)]
+    pub orders: Vec<QueuedOrder>,
+    #[serde(default)]
+    pub pending_order: Option<OrderDraft>,
+    #[serde(default = "default_verbose")]
+    pub verbose: bool,
+    #[serde(default)]
+    pub last_reply: String,
+    #[serde(default)]
+    pub day_start: DayStart,
+}
+
+fn default_verbose() -> bool {
+    true
 }
 
 fn starting_credits() -> i64 {
@@ -163,7 +254,26 @@ impl PlayerState {
             finished: false,
             farmed: BTreeMap::new(),
             waypoint: None,
+            last_brief_day: 0,
+            last_hint_day: 0,
+            last_move_at: now(),
+            last_pos: None,
+            focus_counts: BTreeMap::new(),
+            orders: Vec::new(),
+            pending_order: None,
+            verbose: true,
+            last_reply: String::new(),
+            day_start: DayStart::default(),
         }
+    }
+
+    fn snapshot_day(&mut self) {
+        self.day_start = DayStart {
+            credits: self.credits,
+            sats: self.sats,
+            quests: self.quests.values().filter(|v| **v).count(),
+            tokens: self.tokens.len(),
+        };
     }
 
     fn roll_day(&mut self, day: i64) {
@@ -171,7 +281,16 @@ impl PlayerState {
             self.day = day;
             self.daily_done = false;
             self.sats_today = 0;
+            self.snapshot_day();
         }
+    }
+
+    fn auto_focus(&self) -> String {
+        self.focus_counts
+            .iter()
+            .max_by_key(|(_, count)| **count)
+            .map(|(focus, _)| focus.clone())
+            .unwrap_or_else(starting_focus)
     }
 }
 
@@ -189,6 +308,17 @@ pub enum Intent {
     Next,
     Plan,
     Daily,
+    Route,
+    Brief,
+    Receipt,
+    Mer,
+    Compare,
+    Order(OrderDraft),
+    Delegate(String),
+    Confirm,
+    Deny,
+    Shorten,
+    Repeat,
     Quest(String),
     Focus(String),
     Where(String),
@@ -290,6 +420,85 @@ impl Assistant {
 
         let mut action = None;
         let (spoken, intent_name) = match &intent {
+            Intent::Route => {
+                let (stops, total_sats, walk_blocks) = self.route(name, pos);
+                action = Some(Action::Route {
+                    stops: stops.clone(),
+                    total_sats,
+                    walk_blocks,
+                });
+                if stops.is_empty() {
+                    ("The route is clear; every beginner quest is complete.".to_owned(), "route")
+                } else {
+                    let first = &stops[0];
+                    (
+                        format!(
+                            "Route: {} stop(s), {} sats, {:.0} blocks. First: {} ({:.0} blocks, {}).",
+                            stops.len(), total_sats, walk_blocks, first.label, first.distance,
+                            first.step
+                        ),
+                        "route",
+                    )
+                }
+            }
+            Intent::Brief => {
+                let text = self.briefing(name, pos);
+                (text, "briefing")
+            }
+            Intent::Receipt => {
+                let (text, credits, sats, quests, tokens) = self.receipt(name);
+                action = Some(Action::Receipt {
+                    credits,
+                    sats,
+                    quests,
+                    tokens,
+                });
+                (text, "receipt")
+            }
+            Intent::Mer => (self.mer(name), "mer"),
+            Intent::Compare => (self.compare(name, pos), "compare"),
+            Intent::Order(draft) => {
+                let (text, order_action) = self.order(name, draft);
+                action = order_action;
+                (text, "order")
+            }
+            Intent::Delegate(task) => {
+                action = Some(Action::Delegate {
+                    task: task.clone(),
+                    topic: "wa/v1/c2/torrance/cc/task".into(),
+                });
+                (
+                    format!(
+                        "Delegated {task} to the command centre. It will post a receipt; \
+                         the walk, the photo and the keys stay yours."
+                    ),
+                    "delegate",
+                )
+            }
+            Intent::Confirm => {
+                let (text, confirm_action) = self.confirm_pending(name);
+                action = confirm_action;
+                (text, "confirm")
+            }
+            Intent::Deny => {
+                let p = self.data.players.get_mut(name).expect("ensured");
+                p.pending_order = None;
+                ("Cancelled the pending action.".to_owned(), "deny")
+            }
+            Intent::Shorten => {
+                let p = self.data.players.get_mut(name).expect("ensured");
+                p.verbose = false;
+                ("Short answers from now on. Say 'verbose' to restore detail.".to_owned(), "shorten")
+            }
+            Intent::Repeat => {
+                let p = self.data.players.get(name).expect("ensured");
+                let last = p.last_reply.clone();
+                if last.is_empty() {
+                    ("Nothing to repeat yet.".to_owned(), "repeat")
+                } else {
+                    (last, "repeat")
+                }
+            }
             Intent::Help => (
                 "I can give status, choose the next step, run the day, set a focus, find a \
                  place, mark a waypoint, claim the token or business you are standing on, \
@@ -396,12 +605,18 @@ impl Assistant {
             Intent::Focus(focus) => {
                 let focus = focus.trim().to_ascii_lowercase();
                 let allowed = ["food", "farm", "build", "production", "trade", "gold", "explore", "social"];
-                if allowed.contains(&focus.as_str()) {
+                if focus == "auto" {
+                    let p = self.data.players.get_mut(name).expect("ensured");
+                    let chosen = p.auto_focus();
+                    p.focus = chosen.clone();
+                    (format!("Focus auto chose {chosen} from your past commands."), "focus")
+                } else if allowed.contains(&focus.as_str()) {
                     let p = self.data.players.get_mut(name).expect("ensured");
                     p.focus = focus.clone();
+                    *p.focus_counts.entry(focus.clone()).or_default() += 1;
                     (format!("Focus set to {focus}. I will rank the next step by it."), "focus")
                 } else {
-                    ("Focus can be food, build, trade, explore or social.".into(), "focus")
+                    ("Focus can be food, build, trade, explore, social or auto.".into(), "focus")
                 }
             }
             Intent::Where(wanted) => match self.resolve_place(wanted) {
@@ -473,6 +688,16 @@ impl Assistant {
             ),
         };
 
+        let spoken = {
+            let p = self.data.players.get_mut(name).expect("ensured");
+            let text = if p.verbose {
+                spoken
+            } else {
+                shorten_text(&spoken)
+            };
+            p.last_reply = text.clone();
+            text
+        };
         let progress = self.progress_of(self.data.players.get(name).expect("ensured"), pos);
         self.audit(name, text, intent_name, &spoken);
         self.save();
@@ -493,6 +718,27 @@ impl Assistant {
         self.ensure_player(name).roll_day(day);
         let mut out = Vec::new();
         let mut changed = false;
+
+        {
+            let now_sec = now();
+            let p = self.data.players.get_mut(name).expect("ensured");
+            let moved = p
+                .last_pos
+                .map(|last| distance2([last[0], last[2]], [pos[0], pos[2]]) > 1.0)
+                .unwrap_or(true);
+            if moved {
+                p.last_pos = Some(pos);
+                p.last_move_at = now_sec;
+            } else if now_sec - p.last_move_at > 180 && p.last_hint_day != day {
+                p.last_hint_day = day;
+                out.push(
+                    "No progress for three minutes. Say 'route' for the ordered loop or \
+                     'next' for one step."
+                        .to_owned(),
+                );
+                changed = true;
+            }
+        }
 
         for quest in self.level.quests.clone() {
             if quest.kind != "zone" {
@@ -580,6 +826,355 @@ impl Assistant {
         }
         self.save();
         out
+    }
+
+    fn route(&mut self, name: &str, pos: Option<[f64; 3]>) -> (Vec<RouteStop>, i64, f64) {
+        let day = game_day();
+        self.ensure_player(name).roll_day(day);
+        let at = pos.unwrap_or([self.level.spawn.x, self.level.spawn.y, self.level.spawn.z]);
+        let p = self.data.players.get(name).expect("ensured");
+        let mut stops: Vec<RouteStop> = Vec::new();
+        let mut local_steps: Vec<RouteStop> = Vec::new();
+
+        for business in &self.level.businesses {
+            if p.farmed.get(&business.id).copied() == Some(day) {
+                continue;
+            }
+            stops.push(RouteStop {
+                id: format!("biz:{}", business.id),
+                label: business.name.clone(),
+                kind: "business".into(),
+                x: business.x,
+                y: f64::from(self.level.ground + 1),
+                z: business.z,
+                sats: i64::from(business.sats),
+                step: "walk + photo".into(),
+                distance: 0.0,
+            });
+        }
+        for token in &self.level.tokens {
+            if p.tokens.contains(&token.id) {
+                continue;
+            }
+            stops.push(RouteStop {
+                id: format!("token:{}", token.id),
+                label: format!("{} token", token.id),
+                kind: "token".into(),
+                x: token.x,
+                y: token.y,
+                z: token.z,
+                sats: 5,
+                step: "walk".into(),
+                distance: 0.0,
+            });
+        }
+        for quest in &self.level.quests {
+            if p.quests.get(&quest.id).copied().unwrap_or(false) {
+                continue;
+            }
+            if let Some(zone) = &quest.zone {
+                stops.push(RouteStop {
+                    id: format!("quest:{}", quest.id),
+                    label: quest.title.clone(),
+                    kind: "quest".into(),
+                    x: zone.x,
+                    y: f64::from(self.level.ground + 1),
+                    z: zone.z,
+                    sats: 15,
+                    step: "walk into the zone".into(),
+                    distance: 0.0,
+                });
+            } else {
+                local_steps.push(RouteStop {
+                    id: format!("quest:{}", quest.id),
+                    label: quest.title.clone(),
+                    kind: "quest".into(),
+                    x: at[0],
+                    y: at[1],
+                    z: at[2],
+                    sats: 15,
+                    step: if quest.kind == "place" {
+                        format!("place {} blocks", quest.target)
+                    } else {
+                        format!("break {} blocks", quest.target)
+                    },
+                    distance: 0.0,
+                });
+            }
+        }
+
+        // Nearest-neighbour, then a bounded 2-opt. The level is nine
+        // businesses and sixteen points; anything heavier is overkill.
+        let mut ordered: Vec<RouteStop> = Vec::with_capacity(stops.len());
+        let mut cursor = [at[0], at[2]];
+        while !stops.is_empty() {
+            let mut best = 0;
+            let mut best_d = f64::INFINITY;
+            for (i, stop) in stops.iter().enumerate() {
+                let d = distance2(cursor, [stop.x, stop.z]);
+                if d < best_d {
+                    best_d = d;
+                    best = i;
+                }
+            }
+            let mut stop = stops.remove(best);
+            stop.distance = best_d;
+            cursor = [stop.x, stop.z];
+            ordered.push(stop);
+        }
+        for _ in 0..24 {
+            let mut improved = false;
+            for i in 0..ordered.len().saturating_sub(2) {
+                for j in (i + 2)..ordered.len() {
+                    let a = if i == 0 {
+                        [at[0], at[2]]
+                    } else {
+                        [ordered[i - 1].x, ordered[i - 1].z]
+                    };
+                    let b = [ordered[i].x, ordered[i].z];
+                    let c = [ordered[j].x, ordered[j].z];
+                    let d = if j + 1 < ordered.len() {
+                        [ordered[j + 1].x, ordered[j + 1].z]
+                    } else {
+                        c
+                    };
+                    let old = distance2(a, b) + distance2(c, d);
+                    let new = distance2(a, c) + distance2(b, d);
+                    if new + 0.001 < old {
+                        ordered[i..=j].reverse();
+                        improved = true;
+                    }
+                }
+            }
+            if !improved {
+                break;
+            }
+        }
+        ordered.extend(local_steps);
+        let mut walk = 0.0;
+        let mut prev = [at[0], at[2]];
+        for stop in &mut ordered {
+            stop.distance = distance2(prev, [stop.x, stop.z]);
+            walk += stop.distance;
+            prev = [stop.x, stop.z];
+        }
+        let total_sats = ordered.iter().map(|s| s.sats).sum();
+        (ordered, total_sats, walk)
+    }
+
+    fn briefing(&mut self, name: &str, pos: Option<[f64; 3]>) -> String {
+        let day = game_day();
+        self.ensure_player(name).roll_day(day);
+        let fresh = {
+            let p = self.data.players.get(name).expect("ensured");
+            p.last_brief_day != day
+        };
+        let (stops, total_sats, walk) = self.route(name, pos);
+        let first = stops
+            .first()
+            .map(|s| format!("{:.0} blocks to {} ({})", s.distance, s.label, s.step));
+        let p = self.data.players.get_mut(name).expect("ensured");
+        p.last_brief_day = day;
+        self.save();
+        let prefix = if fresh {
+            "New game day."
+        } else {
+            "Today's board."
+        };
+        match first {
+            Some(first) => format!(
+                "{prefix} {} stops, {} sats, {:.0} blocks. First: {first}. Say route for the order.",
+                stops.len(), total_sats, walk
+            ),
+            None => format!("{prefix} The board is clear; the freebuild plot is open."),
+        }
+    }
+
+    pub fn briefing_if_due(&mut self, name: &str, pos: Option<[f64; 3]>) -> Option<String> {
+        let day = game_day();
+        self.ensure_player(name).roll_day(day);
+        if self
+            .data
+            .players
+            .get(name)
+            .map(|p| p.last_brief_day == day)
+            .unwrap_or(false)
+        {
+            None
+        } else {
+            Some(self.briefing(name, pos))
+        }
+    }
+
+    fn receipt(&mut self, name: &str) -> (String, i64, i64, usize, usize) {
+        let day = game_day();
+        self.ensure_player(name).roll_day(day);
+        let p = self.data.players.get(name).expect("ensured");
+        let credits = p.credits - p.day_start.credits;
+        let sats = p.sats - p.day_start.sats;
+        let quests = p.quests.values().filter(|v| **v).count() - p.day_start.quests;
+        let tokens = p.tokens.len() - p.day_start.tokens;
+        let text = format!(
+            "Today: {:+} credits, {:+} sats, {} quest(s), {} token(s), {} order(s) queued.",
+            credits,
+            sats,
+            quests,
+            tokens,
+            p.orders.len()
+        );
+        (text, credits, sats, quests, tokens)
+    }
+
+    fn mer(&mut self, name: &str) -> String {
+        let day = game_day();
+        self.ensure_player(name).roll_day(day);
+        let p = self.data.players.get(name).expect("ensured");
+        let credits = p.credits - p.day_start.credits;
+        let sats = p.sats - p.day_start.sats;
+        let sinks = p
+            .orders
+            .iter()
+            .filter(|o| o.side == "buy")
+            .map(|o| o.qty * o.price)
+            .sum::<i64>();
+        format!(
+            "MER: faucets {:+} credits and {:+} sats; buy-side queued {} credits; delta {}.",
+            credits,
+            sats,
+            sinks,
+            credits + sats - sinks
+        )
+    }
+
+    fn compare(&mut self, name: &str, pos: Option<[f64; 3]>) -> String {
+        let day = game_day();
+        self.ensure_player(name).roll_day(day);
+        let (quests_left, businesses_left, sats_left, focus) = {
+            let p = self.data.players.get(name).expect("ensured");
+            (
+                self.level
+                    .quests
+                    .iter()
+                    .filter(|q| !p.quests.get(&q.id).copied().unwrap_or(false))
+                    .count(),
+                self.level
+                    .businesses
+                    .iter()
+                    .filter(|b| p.farmed.get(&b.id).copied() != Some(day))
+                    .count(),
+                self.level
+                    .businesses
+                    .iter()
+                    .filter(|b| p.farmed.get(&b.id).copied() != Some(day))
+                    .map(|b| i64::from(b.sats))
+                    .sum::<i64>(),
+                p.focus.clone(),
+            )
+        };
+        let route = self.route(name, pos);
+        let first = route
+            .0
+            .first()
+            .map(|s| s.label.clone())
+            .unwrap_or_else(|| "freebuild".into());
+        format!(
+            "Quests: {} left, {} credits. Sats: {} businesses, {} sats. Focus {}; \
+             best next is {}. I would take the sats while the day is fresh, then the quest board.",
+            quests_left,
+            quests_left as i64 * QUEST_CREDITS,
+            businesses_left,
+            sats_left,
+            focus,
+            first
+        )
+    }
+
+    fn order(&mut self, name: &str, draft: &OrderDraft) -> (String, Option<Action>) {
+        if draft.qty <= 0 || draft.price <= 0 {
+            let missing = if draft.qty <= 0 { "quantity" } else { "price" };
+            return (
+                format!(
+                    "Order needs a {}: say '{} {} {} at 11 in {}'.",
+                    missing,
+                    draft.side,
+                    if draft.qty > 0 { draft.qty } else { 1 },
+                    draft.item,
+                    draft.region
+                ),
+                None,
+            );
+        }
+        let total = draft.qty * draft.price;
+        if total > 500 {
+            let p = self.data.players.get_mut(name).expect("ensured");
+            p.pending_order = Some(draft.clone());
+            return (
+                format!(
+                    "That is {} credits, over the 500-credit spoken cap. Say 'confirm order'.",
+                    total
+                ),
+                None,
+            );
+        }
+        let queued = QueuedOrder {
+            side: draft.side.clone(),
+            item: draft.item.clone(),
+            qty: draft.qty,
+            price: draft.price,
+            region: draft.region.clone(),
+            status: "queued".into(),
+            at: now(),
+        };
+        let p = self.data.players.get_mut(name).expect("ensured");
+        p.orders.push(queued);
+        (
+            format!(
+                "Queued {} {} {} at {} in {}; the command centre settles it.",
+                draft.side, draft.qty, draft.item, draft.price, draft.region
+            ),
+            Some(Action::Order {
+                side: draft.side.clone(),
+                item: draft.item.clone(),
+                qty: draft.qty,
+                price: draft.price,
+                region: draft.region.clone(),
+            }),
+        )
+    }
+
+    fn confirm_pending(&mut self, name: &str) -> (String, Option<Action>) {
+        let pending = self
+            .data
+            .players
+            .get_mut(name)
+            .and_then(|p| p.pending_order.take());
+        let Some(draft) = pending else {
+            return ("Nothing is waiting for confirmation.".to_owned(), None);
+        };
+        let queued = QueuedOrder {
+            side: draft.side.clone(),
+            item: draft.item.clone(),
+            qty: draft.qty,
+            price: draft.price,
+            region: draft.region.clone(),
+            status: "queued".into(),
+            at: now(),
+        };
+        let p = self.data.players.get_mut(name).expect("ensured");
+        p.orders.push(queued);
+        (
+            format!(
+                "Confirmed: {} {} {} at {} in {} queued.",
+                draft.side, draft.qty, draft.item, draft.price, draft.region
+            ),
+            Some(Action::Order {
+                side: draft.side,
+                item: draft.item,
+                qty: draft.qty,
+                price: draft.price,
+                region: draft.region,
+            }),
+        )
     }
 
     fn complete_quest(&mut self, name: &str, id: &str, out: &mut Vec<String>) {
@@ -1074,13 +1669,93 @@ pub fn parse_intent(text: &str) -> Intent {
     if low.is_empty() {
         return Intent::Unknown;
     }
+    if low.contains("confirm reset") || low.contains("confirm restart") {
+        return Intent::Reset { confirm: true };
+    }
+    if matches!(
+        low.as_str(),
+        "confirm" | "yes" | "do it" | "confirm order" | "ok"
+    ) {
+        return Intent::Confirm;
+    }
+    if matches!(low.as_str(), "no" | "cancel" | "never mind" | "nevermind") {
+        return Intent::Deny;
+    }
+    if low == "route"
+        || low.contains("plan the loop")
+        || low.contains("run the loop")
+        || low.contains("best route")
+        || low.contains("route today")
+    {
+        return Intent::Route;
+    }
+    if low == "brief"
+        || low == "briefing"
+        || low.contains("daily briefing")
+        || low.contains("what is today")
+    {
+        return Intent::Brief;
+    }
+    if low == "repeat" || low.contains("say that again") || low.contains("repeat that") {
+        return Intent::Repeat;
+    }
+    if low == "shorter" || low == "be brief" || low == "be concise" || low == "less talk" {
+        return Intent::Shorten;
+    }
+    if low == "mer" || low.contains("market metrics") || low.contains("faucet") {
+        return Intent::Mer;
+    }
+    if low == "receipt"
+        || low.contains("daily receipt")
+        || low.contains("how did today go")
+        || low.contains("what did i earn")
+    {
+        return Intent::Receipt;
+    }
+    if low.contains("vs")
+        || low.contains("versus")
+        || low.contains("what is worth")
+        || low.contains("best for credits")
+        || low.contains("campaign or quests")
+    {
+        return Intent::Compare;
+    }
+    if let Some(rest) = low
+        .strip_prefix("delegate ")
+        .or_else(|| low.strip_prefix("let the cc "))
+        .or_else(|| low.strip_prefix("have the cc "))
+    {
+        return Intent::Delegate(rest.to_owned());
+    }
+    if low.contains("delegate") && low.contains("market") {
+        return Intent::Delegate("market bookkeeping".into());
+    }
+    if low.contains("delegate") && low.contains("citizen") {
+        return Intent::Delegate("citizen assignments".into());
+    }
+    if low.contains("delegate") && low.contains("contract") {
+        return Intent::Delegate("contract paperwork".into());
+    }
+    if (low.starts_with("sell ") || low.starts_with("buy "))
+        && ["wheat", "carrot", "coffee", "brick", "token"]
+            .iter()
+            .any(|item| low.contains(item))
+    {
+        if let Some(draft) = parse_order(&low) {
+            return Intent::Order(draft);
+        }
+    }
     if low == "help" || low.contains("what can you do") || low.contains("menu") {
         return Intent::Help;
     }
     if low.contains("status") || low.contains("how am i doing") || low == "report" {
         return Intent::Status;
     }
-    if low.contains("run the day") || low.contains("daily") || low.contains("chores") {
+    if low.contains("run the day")
+        || low.contains("run my day")
+        || low.contains("daily")
+        || low.contains("chores")
+    {
         return Intent::Daily;
     }
     if low.contains("confirm reset") || low.contains("confirm restart") {
@@ -1089,11 +1764,11 @@ pub fn parse_intent(text: &str) -> Intent {
     if low.contains("reset") || low.contains("restart") {
         return Intent::Reset { confirm: false };
     }
-    if low.contains("pause") || low.contains("stop ai") || low.contains("freeze") {
-        return Intent::Pause;
-    }
     if low.contains("resume") || low.contains("unpause") || low.contains("continue") {
         return Intent::Resume;
+    }
+    if low.contains("pause") || low.contains("stop ai") || low.contains("freeze") {
+        return Intent::Pause;
     }
     if low == "next"
         || low.contains("what should i do")
@@ -1153,6 +1828,60 @@ pub fn parse_intent(text: &str) -> Intent {
     Intent::Unknown
 }
 
+fn parse_order(low: &str) -> Option<OrderDraft> {
+    let mut words = low.split_whitespace();
+    let side = match words.next()? {
+        "sell" => "sell",
+        "buy" => "buy",
+        _ => return None,
+    };
+    let mut qty = 0i64;
+    let mut price = 0i64;
+    let mut item = String::new();
+    let mut region = "garden".to_owned();
+    let rest: Vec<&str> = words.collect();
+    let mut i = 0;
+    while i < rest.len() {
+        let word = rest[i];
+        if let Ok(number) = word.parse::<i64>() {
+            if qty == 0 {
+                qty = number;
+            } else if price == 0 {
+                price = number;
+            }
+        } else if ["wheat", "carrot", "coffee", "brick", "token"].contains(&word) {
+            item = word.to_owned();
+        } else if ["garden", "park", "market", "dealer"].contains(&word) {
+            region = word.to_owned();
+        } else if (word == "at" || word == "for") && i + 1 < rest.len() {
+            if let Ok(number) = rest[i + 1].parse::<i64>() {
+                price = number;
+                i += 1;
+            }
+        }
+        i += 1;
+    }
+    if item.is_empty() {
+        return None;
+    }
+    Some(OrderDraft {
+        side: side.to_owned(),
+        item,
+        qty,
+        price,
+        region,
+    })
+}
+
+fn shorten_text(text: &str) -> String {
+    let first = text.split(". ").next().unwrap_or(text);
+    if first.chars().count() <= 120 {
+        first.to_owned()
+    } else {
+        first.chars().take(117).collect::<String>() + "..."
+    }
+}
+
 fn distance2(a: [f64; 2], b: [f64; 2]) -> f64 {
     ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt()
 }
@@ -1189,6 +1918,28 @@ pub fn chat_system(
             Some([pos.0.x, pos.0.y, pos.0.z]),
         );
         client.send_chat_message(reply.spoken);
+    }
+}
+
+pub fn briefing_system(
+    mut clients: Query<(&Username, &Position, &mut Client)>,
+    ai: Res<AiHandle>,
+    mut last: Local<Option<std::time::Instant>>,
+) {
+    let now = std::time::Instant::now();
+    let due = (*last)
+        .map(|t| now.duration_since(t).as_secs_f32() >= 2.0)
+        .unwrap_or(true);
+    if !due {
+        return;
+    }
+    *last = Some(now);
+
+    let mut ai = ai.0.lock().expect("assistant mutex");
+    for (username, pos, mut client) in &mut clients {
+        if let Some(text) = ai.briefing_if_due(&username.0, Some([pos.0.x, pos.0.y, pos.0.z])) {
+            client.send_chat_message(text.color(Color::GREEN));
+        }
     }
 }
 
@@ -1355,6 +2106,51 @@ mod tests {
     }
 
     #[test]
+    fn shared_intent_registry_matches_the_rust_router() {
+        let raw = include_str!("../../../web/src/intents.json");
+        let value: serde_json::Value = serde_json::from_str(raw).expect("valid intents.json");
+        let intents = value["intents"].as_array().expect("intents array");
+        for entry in intents {
+            let Some(phrases) = entry.get("phrases").and_then(|v| v.as_array()) else {
+                continue;
+            };
+            let id = entry["id"].as_str().unwrap_or("");
+            for phrase in phrases {
+                let phrase = phrase.as_str().unwrap_or("");
+                let parsed = parse_intent(phrase);
+                let matched = match id {
+                    "help" => matches!(parsed, Intent::Help),
+                    "status" => matches!(parsed, Intent::Status),
+                    "next" => matches!(parsed, Intent::Next),
+                    "plan" => matches!(parsed, Intent::Plan),
+                    "daily" => matches!(parsed, Intent::Daily),
+                    "route" => matches!(parsed, Intent::Route),
+                    "briefing" => matches!(parsed, Intent::Brief),
+                    "receipt" => matches!(parsed, Intent::Receipt),
+                    "mer" => matches!(parsed, Intent::Mer),
+                    "compare" => matches!(parsed, Intent::Compare),
+                    "delegate_market" | "delegate_citizens" | "delegate_contracts" => {
+                        matches!(parsed, Intent::Delegate(_))
+                    }
+                    "confirm" => matches!(parsed, Intent::Confirm),
+                    "deny" => matches!(parsed, Intent::Deny),
+                    "shorten" => matches!(parsed, Intent::Shorten),
+                    "repeat" => matches!(parsed, Intent::Repeat),
+                    "pause" => matches!(parsed, Intent::Pause),
+                    "resume" => matches!(parsed, Intent::Resume),
+                    "claim" => matches!(parsed, Intent::Claim),
+                    "reset" => matches!(parsed, Intent::Reset { .. }),
+                    _ => true,
+                };
+                assert!(
+                    matched,
+                    "registry phrase {phrase:?} did not parse as {id}: {parsed:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn parser_does_not_invent_tools() {
         assert_eq!(parse_intent("give me a diamond"), Intent::Unknown);
         assert_eq!(parse_intent("withdraw one bitcoin"), Intent::Unknown);
@@ -1440,6 +2236,123 @@ mod tests {
         a.handle("tester", "focus build", None);
         let next = a.handle("tester", "next", Some([48.0, 9.0, 37.0]));
         assert!(next.spoken.contains("Place 10 blocks") || next.spoken.contains("Break 5 blocks"));
+    }
+
+    #[test]
+    fn route_visits_every_open_stop_once() {
+        let mut a = Assistant::in_memory(level());
+        let (stops, sats, walk) = a.route("tester", Some([48.0, 9.0, 37.0]));
+        assert!(!stops.is_empty());
+        assert!(sats > 0);
+        assert!(walk > 0.0);
+        let ids: std::collections::BTreeSet<_> = stops.iter().map(|s| s.id.clone()).collect();
+        assert_eq!(ids.len(), stops.len(), "no stop may appear twice");
+        assert!(stops.iter().any(|s| s.id == "quest:garden"));
+        assert!(stops.iter().any(|s| s.id.starts_with("biz:")));
+        assert!(stops.iter().any(|s| s.id.starts_with("token:")));
+    }
+
+    #[test]
+    fn briefing_is_once_per_game_day() {
+        let mut a = Assistant::in_memory(level());
+        let first = a.briefing_if_due("tester", Some([48.0, 9.0, 37.0]));
+        assert!(first.as_deref().unwrap_or("").contains("New game day"));
+        let second = a.briefing_if_due("tester", Some([48.0, 9.0, 37.0]));
+        assert!(second.is_none());
+    }
+
+    #[test]
+    fn receipt_compares_the_day_start() {
+        let mut a = Assistant::in_memory(level());
+        a.tick_position("tester", [25.0, 9.0, 25.0]);
+        let (text, credits, _sats, quests, _tokens) = a.receipt("tester");
+        assert!(text.contains("Today"));
+        assert!(credits >= QUEST_CREDITS);
+        assert!(quests >= 1);
+    }
+
+    #[test]
+    fn order_needs_slots_and_a_confirmation_above_the_cap() {
+        let mut a = Assistant::in_memory(level());
+        let missing = a.handle("tester", "sell wheat", None);
+        assert_eq!(missing.intent, "order");
+        assert!(missing.spoken.contains("quantity"));
+        assert!(!missing.spoken.contains("Queued"));
+
+        let over = a.handle("tester", "sell 100 wheat at 10", None);
+        assert!(over.spoken.contains("confirm"));
+        assert!(a.data.players["tester"].pending_order.is_some());
+        let confirmed = a.handle("tester", "confirm order", None);
+        assert_eq!(confirmed.intent, "confirm");
+        assert!(a.data.players["tester"].orders.len() == 1);
+    }
+
+    #[test]
+    fn order_parses_the_voice_shape() {
+        let intent = parse_intent("sell 2 wheat at 11 in garden");
+        match intent {
+            Intent::Order(draft) => {
+                assert_eq!(draft.side, "sell");
+                assert_eq!(draft.item, "wheat");
+                assert_eq!(draft.qty, 2);
+                assert_eq!(draft.price, 11);
+                assert_eq!(draft.region, "garden");
+            }
+            other => panic!("expected order, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn focus_auto_learns_the_most_used_focus() {
+        let mut a = Assistant::in_memory(level());
+        a.handle("tester", "focus build", None);
+        a.handle("tester", "focus build", None);
+        a.handle("tester", "focus trade", None);
+        let auto = a.handle("tester", "focus auto", None);
+        assert!(auto.spoken.contains("build"));
+        assert_eq!(a.progress("tester", None).focus, "build");
+    }
+
+    #[test]
+    fn compare_and_shorten_are_closed_tools() {
+        let mut a = Assistant::in_memory(level());
+        let compare = a.handle("tester", "quests vs sats", None);
+        assert_eq!(compare.intent, "compare");
+        assert!(compare.spoken.contains("Quests"));
+        let short = a.handle("tester", "shorter", None);
+        assert_eq!(short.intent, "shorten");
+        let next = a.handle("tester", "next", None);
+        assert!(!next.spoken.contains("I marked it"));
+        let repeat = a.handle("tester", "repeat", None);
+        assert_eq!(repeat.intent, "repeat");
+        assert_eq!(repeat.spoken, next.spoken);
+    }
+
+    #[test]
+    fn stuck_hint_is_once_per_day() {
+        let mut a = Assistant::in_memory(level());
+        a.tick_position("tester", [48.0, 9.0, 37.0]);
+        let day = game_day();
+        {
+            let p = a.data.players.get_mut("tester").unwrap();
+            p.last_move_at = now() - 240;
+            p.last_hint_day = 0;
+            p.last_pos = Some([48.0, 9.0, 37.0]);
+            p.day = day;
+        }
+        let lines = a.tick_position("tester", [48.0, 9.0, 37.0]);
+        assert!(lines.iter().any(|l| l.contains("No progress")));
+        let again = a.tick_position("tester", [48.0, 9.0, 37.0]);
+        assert!(!again.iter().any(|l| l.contains("No progress")));
+    }
+
+    #[test]
+    fn delegate_is_a_closed_tool() {
+        let mut a = Assistant::in_memory(level());
+        let reply = a.handle("tester", "delegate the market", None);
+        assert_eq!(reply.intent, "delegate");
+        assert!(matches!(reply.action, Some(Action::Delegate { .. })));
+        assert!(reply.spoken.contains("command centre"));
     }
 
     #[test]

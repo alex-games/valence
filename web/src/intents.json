@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "rule": "One closed vocabulary for the WebView router and the Valence assistant. Phrases are matched after lowercasing and collapsing whitespace/punctuation; parameterised tools (quest/focus/where/mark/talk/order) keep their own parsers but must return the tool id listed here.",
+  "intents": [
+    {"id": "help", "tool": "game.help", "phrases": ["help", "what can you do", "menu"]},
+    {"id": "status", "tool": "game.status", "phrases": ["status", "report", "how am i doing"]},
+    {"id": "next", "tool": "game.next", "phrases": ["next", "what should i do", "what next", "guide me", "where do i go"]},
+    {"id": "plan", "tool": "game.plan", "phrases": ["plan", "make a plan", "three steps", "toil"]},
+    {"id": "daily", "tool": "game.daily", "phrases": ["run the day", "daily", "do the chores", "run my day"]},
+    {"id": "route", "tool": "game.route", "phrases": ["route", "plan the loop", "run the loop", "best route", "route today"]},
+    {"id": "briefing", "tool": "game.briefing", "phrases": ["brief", "briefing", "daily briefing", "what is today"]},
+    {"id": "receipt", "tool": "game.receipt", "phrases": ["receipt", "daily receipt", "how did today go", "what did i earn"]},
+    {"id": "mer", "tool": "game.mer", "phrases": ["mer", "market metrics", "faucet"]},
+    {"id": "compare", "tool": "game.compare", "phrases": ["quests vs sats", "versus", "what is worth", "best for credits", "campaign or quests"]},
+    {"id": "delegate_market", "tool": "game.delegate", "phrases": ["delegate the market", "let the cc handle the market", "have the cc do the bookkeeping"]},
+    {"id": "delegate_citizens", "tool": "game.delegate", "phrases": ["delegate citizens", "let the cc handle the citizens"]},
+    {"id": "delegate_contracts", "tool": "game.delegate", "phrases": ["delegate contracts", "let the cc handle the contracts"]},
+    {"id": "confirm", "tool": "game.confirm", "phrases": ["confirm", "yes", "do it", "confirm order", "ok"]},
+    {"id": "deny", "tool": "game.deny", "phrases": ["no", "cancel", "never mind", "nevermind"]},
+    {"id": "shorten", "tool": "game.shorten", "phrases": ["shorter", "be brief", "be concise", "less talk"]},
+    {"id": "repeat", "tool": "game.repeat", "phrases": ["repeat", "say that again", "repeat that"]},
+    {"id": "pause", "tool": "game.pause", "phrases": ["pause", "stop ai", "freeze"]},
+    {"id": "resume", "tool": "game.resume", "phrases": ["resume", "unpause", "continue"]},
+    {"id": "claim", "tool": "game.claim", "phrases": ["claim", "collect", "pick up"]},
+    {"id": "reset", "tool": "game.reset", "phrases": ["reset", "restart", "confirm reset", "confirm restart"]},
+    {"id": "quest", "tool": "game.quest", "parameterised": "quest <name>"},
+    {"id": "focus", "tool": "game.focus", "parameterised": "focus <food|build|trade|explore|social|auto>"},
+    {"id": "where", "tool": "game.where", "parameterised": "where is <place>"},
+    {"id": "mark", "tool": "game.mark", "parameterised": "mark <x> <z>"},
+    {"id": "talk", "tool": "game.talk", "parameterised": "talk to <npc>"},
+    {"id": "order", "tool": "game.order", "parameterised": "sell|buy <qty> <item> at <price> in <region>"}
+  ]
+}

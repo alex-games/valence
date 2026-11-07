@@ -45,6 +45,7 @@ fn main() {
             (
                 world::init_clients,
                 ai::chat_system,
+                ai::briefing_system,
                 ai::zone_system,
                 ai::place_system,
                 ai::break_system,

@@ -88,6 +88,44 @@ fn run(broker: String, client_id: String, ai: Arc<Mutex<Assistant>>) {
             .lock()
             .expect("assistant mutex")
             .handle(&player, &text, pos);
+        // The assistant's closed tools become real C2 intents. The CC NPC
+        // consumes cc/task; the commerce engine consumes commerce/order.
+        match &reply.action {
+            Some(crate::ai::Action::Delegate { task, topic }) => {
+                let body = serde_json::json!({
+                    "task": task,
+                    "player": player,
+                    "at": std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0),
+                });
+                client
+                    .publish(topic.clone(), QoS::AtLeastOnce, false, body.to_string())
+                    .ok();
+            }
+            Some(crate::ai::Action::Order {
+                side,
+                item,
+                qty,
+                price,
+                region,
+            }) => {
+                let body = serde_json::json!({
+                    "pid": player, "side": side, "item": item, "qty": qty,
+                    "price": price, "region": region,
+                });
+                client
+                    .publish(
+                        format!("{ROOT}/commerce/order"),
+                        QoS::AtLeastOnce,
+                        false,
+                        body.to_string(),
+                    )
+                    .ok();
+            }
+            _ => {}
+        }
         let payload = serde_json::to_vec(&reply).unwrap_or_default();
         client
             .publish(

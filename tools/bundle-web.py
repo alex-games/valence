@@ -90,11 +90,13 @@ def main() -> int:
     if ofl.exists():
         credits += "\n\n--- SIL OPEN FONT LICENSE ---\n\n" + ofl.read_text(encoding="utf-8")
 
+    intents = json.loads((SRC / "intents.json").read_text(encoding="utf-8"))
     asset_js = (
         "window.__TEXTURES__=" + json.dumps(tiles, ensure_ascii=False) + ";\n"
         "window.__SPRITES__=" + json.dumps(sprites, ensure_ascii=False) + ";\n"
         "window.__AUDIO__=" + json.dumps(audio, ensure_ascii=False) + ";\n"
         "window.__CREDITS__=" + json.dumps(credits, ensure_ascii=False) + ";\n"
+        "window.__INTENTS__=" + json.dumps(intents, ensure_ascii=False) + ";\n"
     )
 
     html = html.replace(CSS_MARKER, css, 1)

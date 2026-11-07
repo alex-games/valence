@@ -172,6 +172,23 @@ fn handle(mut stream: TcpStream, ai: Arc<Mutex<Assistant>>, level: Level) {
                 head_only,
             );
         }
+        ("GET" | "HEAD", "/api/briefing") => {
+            let player = query_value(query, "player").unwrap_or_else(|| "webview".into());
+            let pos = parse_pos(query);
+            let text = ai
+                .lock()
+                .expect("assistant mutex")
+                .briefing_if_due(&player, pos);
+            let payload = json!({ "briefing": text }).to_string();
+            write_response(
+                &mut stream,
+                "200 OK",
+                "application/json",
+                payload.as_bytes(),
+                cors,
+                head_only,
+            );
+        }
         ("GET" | "HEAD", "/api/progress") => {
             let player = query_value(query, "player").unwrap_or_else(|| "webview".into());
             let pos = parse_pos(query);
