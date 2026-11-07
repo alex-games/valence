@@ -1,22 +1,79 @@
 #!/bin/sh
 #
-# Vault holds each player's Bitcoin wallet. Dev mode is deliberate for this
-# disposable game guest: a fixed root token on loopback, KV v2 at secret/, and
-# no TLS. Replace with a file backend + operator init/unseal before exposing
-# anything beyond the VM.
+# Vault holds the **user game state** for every player, plus the per-player
+# Bitcoin testnet wallet. PostgreSQL holds the sidechain (edits, accounts, shard
+# tips, anchors). Both live under /var/lib and are therefore in the warm-boot
+# snapshot.
+#
+# **File backend, not `-dev`.** Dev mode is in-memory; a warm boot would restore
+# an empty Vault and every player would lose their state. The first boot
+# initialises Vault and unseals it; later boots read the same init file.
+#
+# This is still a demo posture: the unseal key and root token live on the guest
+# (0600), and the listener is loopback-only. A real deployment uses a separate
+# unseal custodian and TLS.
 #
 DAEMON=/usr/bin/vault
 PID=/var/run/vault.pid
 LOG=/var/log/vault.log
+CONFIG=/etc/vault/vault.hcl
+STATE=/var/lib/vault
+INIT="$STATE/init.json"
+TOKEN_FILE="$STATE/root-token"
+export VAULT_ADDR=http://127.0.0.1:8200
+
+start_vault() {
+    mkdir -p "$STATE/data" /var/log
+    chmod 700 "$STATE"
+    start-stop-daemon -S -q -b -m -p "$PID" -x "$DAEMON" -- \
+        server -config="$CONFIG" >>"$LOG" 2>&1
+
+    i=0
+    while [ "$i" -lt 30 ]; do
+        if "$DAEMON" status >/dev/null 2>&1; then break; fi
+        i=$((i + 1))
+        sleep 1
+    done
+
+    if [ ! -f "$INIT" ]; then
+        "$DAEMON" operator init -key-shares=1 -key-threshold=1 -format=json \
+            >"$INIT" 2>>"$LOG" || {
+            echo "FAIL (init; see $LOG)"
+            return 1
+        }
+        chmod 600 "$INIT"
+    fi
+
+    TOKEN=$(python3 -c 'import json;print(json.load(open("/var/lib/vault/init.json"))["root_token"])' 2>>"$LOG")
+    UNSEAL=$(python3 -c 'import json;print(json.load(open("/var/lib/vault/init.json"))["unseal_keys_b64"][0])' 2>>"$LOG")
+    if [ -z "$TOKEN" ] || [ -z "$UNSEAL" ]; then
+        echo "FAIL (init file unreadable)"
+        return 1
+    fi
+    printf '%s\n' "$TOKEN" >"$TOKEN_FILE"
+    chmod 600 "$TOKEN_FILE"
+
+    # `vault status` returns non-zero while sealed; unseal is idempotent.
+    if ! "$DAEMON" status >/dev/null 2>&1; then
+        "$DAEMON" operator unseal "$UNSEAL" >>"$LOG" 2>&1 || {
+            echo "FAIL (unseal; see $LOG)"
+            return 1
+        }
+    fi
+
+    # KV v2 at secret/ is the game-state path. It exists after the first boot;
+    # re-running enable is harmless but noisy, so ignore the already-exists case.
+    VAULT_TOKEN="$TOKEN" "$DAEMON" secrets enable -path=secret kv-v2 \
+        >>"$LOG" 2>&1 || true
+
+    echo "OK (file backend; user state at secret/nautilus/game)"
+    return 0
+}
 
 case "$1" in
   start)
     printf "Starting vault: "
-    mkdir -p /var/log /var/lib/vault
-    start-stop-daemon -S -q -b -m -p "$PID" -x "$DAEMON" -- \
-        server -dev -dev-root-token-id=nautilus-dev -dev-listen-address=127.0.0.1:8200 >>"$LOG" 2>&1
-    sleep 1
-    echo "OK (dev root token nautilus-dev)"
+    start_vault
     ;;
   stop)
     printf "Stopping vault: "
@@ -28,8 +85,11 @@ case "$1" in
     sleep 1
     "$0" start
     ;;
+  status)
+    "$DAEMON" status
+    ;;
   *)
-    echo "Usage: $0 {start|stop|restart}"
+    echo "Usage: $0 {start|stop|restart|status}"
     exit 1
     ;;
 esac

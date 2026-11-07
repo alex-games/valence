@@ -58,8 +58,8 @@ committing a second copy.
 | nginx | `:80`, `:8080` | `/` and `/embed/` → game; `/mqtt` → Mosquitto |
 | minecraft-server | `127.0.0.1:8081` | assets/manifest from PostgreSQL; MQTT bridge |
 | Mosquitto 2.x | `127.0.0.1:1883`, `9001` ws | MQTT v5; anonymous LAN demo |
-| Vault (dev) | `127.0.0.1:8200` | BTC wallets; root token `nautilus-dev` |
-| PostgreSQL 18.6 | `127.0.0.1:5432` | `nautilus_craft`, user `craft` |
+| Vault (file) | `127.0.0.1:8200` | **user game state + BTC wallets**; auto-init/unseal, root token `/var/lib/vault/root-token` |
+| PostgreSQL 18.6 | `127.0.0.1:5432` | `nautilus_craft` sidechain, user `craft` |
 
 Init order: `S47vault` → `S48mosquitto` → `S49postgres-pgdata` →
 Buildroot `S50postgresql` (initdb/start) → `S51craft-db` (role/database) →
@@ -80,8 +80,16 @@ su - postgres -c "psql -d nautilus_craft -c 'select player_id,name,address,quest
 su - postgres -c "psql -d nautilus_craft -c 'select shard,height,edits from game_side_blocks order by height desc limit 8'"
 su - postgres -c "psql -d nautilus_craft -c 'select height,hash from game_anchors order by height desc limit 4'"
 
-VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=nautilus-dev vault kv get secret/nautilus/players/<pid>
+VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=$(cat /var/lib/vault/root-token) \
+    vault kv get secret/nautilus/players/<pid>
+VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=$(cat /var/lib/vault/root-token) \
+    vault kv get secret/nautilus/game/assistant
 ```
+
+`/var/lib/vault/data` and `/var/lib/pgsql` are both in the guest's persistent
+tree, so a warm-boot snapshot restores the user game state and the sidechain
+together. The old `nautilus-dev` token is gone; `S47vault` initialises the file
+backend once and re-unseals on later boots.
 
 ## Play
 
@@ -94,10 +102,14 @@ VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=nautilus-dev vault kv get secret/na
 
 ## Limits
 
-- Mosquitto and Vault are anonymous/dev-mode LAN services. Put TLS and auth in
-  front before exposure.
-- The Vault dev server stores wallets in memory; a reboot discards them. File
-  storage + operator init/unseal is the production path.
+- Mosquitto is an anonymous LAN broker. Put TLS and auth in front before
+  exposure.
+- Vault is a **file backend** now, so a reboot keeps state; the unseal key and
+  root token still live on the guest (0600). A real deployment uses a separate
+  unseal custodian and TLS.
+- The game server must receive `VAULT_ADDR`/`VAULT_TOKEN` (S52 exports the token
+  from `/var/lib/vault/root-token`); the guest's Vault binary is too large to
+  rebuild casually, so the file backend is the only change here.
 - The map snapshot is capped at 6,000 client edits in the demo.
 - The anchor payload is CC-compatible, but the command centre does not yet
   append it to the global chain.

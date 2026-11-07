@@ -18,6 +18,7 @@ use valence::prelude::*;
 mod ai;
 #[cfg(feature = "c2")]
 mod c2;
+mod vault;
 mod web;
 mod world;
 

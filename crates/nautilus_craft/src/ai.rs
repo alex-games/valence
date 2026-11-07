@@ -24,6 +24,7 @@ use valence::inventory::HeldItem;
 use valence::message::ChatMessageEvent;
 use valence::prelude::*;
 
+use crate::vault::VaultStateStore;
 use crate::world::{Level, NpcActor};
 
 pub const GAME_DAY_SECONDS: i64 = 3_600;
@@ -337,6 +338,9 @@ pub struct Assistant {
     paused: bool,
     state_path: Option<PathBuf>,
     audit_path: Option<PathBuf>,
+    /// Vault KV v2 is the authoritative store when configured; the file is the
+    /// local mirror and the offline fallback.
+    vault: Option<VaultStateStore>,
 }
 
 impl Assistant {
@@ -349,7 +353,21 @@ impl Assistant {
             .ok()
             .map(PathBuf::from)
             .or_else(|| Some(PathBuf::from("nautilus-audit.jsonl")));
-        Self::with_paths(level, state_path, audit_path)
+        let mut assistant = Self::with_paths(level, state_path, audit_path);
+        if let Some(vault) = VaultStateStore::from_env() {
+            if let Some(raw) = vault.load() {
+                match serde_json::from_str::<Persisted>(&raw) {
+                    Ok(loaded) if loaded.version == 1 => {
+                        eprintln!("[ai] loaded user game state from Vault");
+                        assistant.data = loaded;
+                    }
+                    Ok(_) => eprintln!("[ai] Vault state has an unknown version"),
+                    Err(e) => eprintln!("[ai] Vault state is unreadable: {e}"),
+                }
+            }
+            assistant.vault = Some(vault);
+        }
+        assistant
     }
 
     #[cfg(test)]
@@ -378,6 +396,7 @@ impl Assistant {
             paused: std::env::var("NAUTILUS_AI_PAUSED").ok().as_deref() == Some("1"),
             state_path,
             audit_path,
+            vault: None,
         }
     }
 
@@ -1608,15 +1627,19 @@ impl Assistant {
     }
 
     fn save(&self) {
-        let Some(path) = &self.state_path else {
-            return;
-        };
         let Ok(raw) = serde_json::to_string_pretty(&self.data) else {
             return;
         };
-        let tmp = path.with_extension("json.tmp");
-        if std::fs::write(&tmp, raw).is_ok() {
-            let _ = std::fs::rename(&tmp, path);
+        if let Some(path) = &self.state_path {
+            let tmp = path.with_extension("json.tmp");
+            if std::fs::write(&tmp, raw.clone()).is_ok() {
+                let _ = std::fs::rename(&tmp, path);
+            }
+        }
+        if let Some(vault) = &self.vault {
+            if !vault.save(&raw) {
+                eprintln!("[ai] Vault write failed; local state file remains the mirror");
+            }
         }
     }
 }
@@ -1874,8 +1897,7 @@ fn parse_order(low: &str) -> Option<OrderDraft> {
 }
 
 fn mqtt_root() -> String {
-    std::env::var("NAUTILUS_MQTT_ROOT")
-        .unwrap_or_else(|_| "wa/v1/c2/torrance".into())
+    std::env::var("NAUTILUS_MQTT_ROOT").unwrap_or_else(|_| "wa/v1/c2/torrance".into())
 }
 
 fn shorten_text(text: &str) -> String {
@@ -2108,6 +2130,37 @@ mod tests {
             parse_intent("confirm reset"),
             Intent::Reset { confirm: true }
         );
+    }
+
+    #[test]
+    fn save_mirrors_the_user_state_to_vault() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buf = [0u8; 16 * 1024];
+            let n = stream.read(&mut buf).unwrap();
+            tx.send(String::from_utf8_lossy(&buf[..n]).to_string()).ok();
+            let body = r#"{"data":{"version":2}}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(response.as_bytes());
+        });
+
+        let mut assistant = Assistant::in_memory(level());
+        assistant.vault = Some(VaultStateStore::test_store("127.0.0.1", port));
+        assistant.handle("vault-user", "status", None);
+        let request = rx.recv_timeout(std::time::Duration::from_secs(2)).unwrap();
+        assert!(request.starts_with("POST /v1/secret/data/nautilus/game/assistant HTTP/1.1"));
+        assert!(request.contains("\"state\":"));
+        assert!(request.contains("vault-user"));
     }
 
     #[test]

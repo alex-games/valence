@@ -10,8 +10,9 @@ CONF="$TARGET_DIR/etc/nginx/site-enabled/minecraft"
 MQ="$TARGET_DIR/etc/mosquitto/mosquitto.conf"
 PAGE="$TARGET_DIR/nautilus/minecraft/index.html"
 VAULT="$TARGET_DIR/usr/bin/vault"
+VCONF="$TARGET_DIR/etc/vault/vault.hcl"
 
-for f in "$BIN" "$CONF" "$MQ" "$PAGE" "$VAULT"; do
+for f in "$BIN" "$CONF" "$MQ" "$PAGE" "$VAULT" "$VCONF"; do
     if [ ! -e "$f" ]; then
         echo "post-build: missing $f" >&2
         exit 1

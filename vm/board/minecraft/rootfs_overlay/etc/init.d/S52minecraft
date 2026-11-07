@@ -9,6 +9,14 @@ LOG=/var/log/minecraft.log
 case "$1" in
   start)
     printf "Starting minecraft-server: "
+    # The game server reads the Vault root token from the guest's file backend.
+    # Setting it before start-stop-daemon makes it part of the child environment;
+    # the token itself never appears in a log line.
+    if [ -r /var/lib/vault/root-token ]; then
+        NC_VAULT_TOKEN=$(cat /var/lib/vault/root-token)
+        VAULT_TOKEN=$NC_VAULT_TOKEN
+        export NC_VAULT_TOKEN VAULT_TOKEN
+    fi
     start-stop-daemon -S -q -b -m -p "$PID" -x /bin/sh -- \
         -c "exec /usr/bin/minecraft-server --addr 127.0.0.1:8081 >>$LOG 2>&1" || echo "FAIL"
     echo "OK"
