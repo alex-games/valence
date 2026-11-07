@@ -68,7 +68,8 @@ present.
 |---|---|---|---|
 | file-backend Vault + Valence origin | 2026-11-07 | 11,826 s | exit 0, 226 MB, 12,540 blobs |
 | per-player Vault state + revision | 2026-11-07 | 11,855 s | exit 0, 226 MB, 12,540 blobs |
-| cold boot | 2026-11-07 | — | 830 MB raw / 42 MB zst state |
+| S47 init validation | 2026-11-07 | 11,864 s | exit 0, 226 MB, 12,540 blobs |
+| cold boot (S47 build) | 2026-11-07 | — | 830 MB raw / 42 MB zst state |
 
 The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
 binary (timestamp 06:20) and contains the per-player Vault paths.
@@ -77,8 +78,8 @@ binary (timestamp 06:20) and contains the per-player Vault paths.
 `Sealed true` because `init.json` was a non-JSON file from a failed init and the
 old script skipped re-init. `S47vault` now validates the file, moves invalid
 init/keyless storage aside, writes through a temp file, unseals and checks
-`Sealed false`. This build is required before the captured state can be a valid
-user-state checkpoint.
+`Sealed false`. The third image (11,864 s, exit 0) includes the fix. A cold boot
+captured 830 MB / 42 MB zst; the targeted warm-check is still the next proof.
 
 ## 4. What the image now persists
 
