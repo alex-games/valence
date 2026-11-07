@@ -1801,7 +1801,10 @@ function parseTiff(b, base) {
   const coord = (ent, ref) => {
     if (!ent || ent.count !== 3) return null;
     const o = base + ent.val;
-    const d = rational(o) + rational(o + 4) / 60 + rational(o + 8) / 3600;
+    // Each RATIONAL is 8 bytes: numerator + denominator. Reading the second
+    // pair at o+4 read the first denominator as the minutes numerator, which
+    // is exactly the 33.8096 -> 33.0136 corruption in D57.
+    const d = rational(o) + rational(o + 8) / 60 + rational(o + 16) / 3600;
     return (ref === 'S' || ref === 'W') ? -d : d;
   };
   return {
