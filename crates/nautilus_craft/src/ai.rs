@@ -465,7 +465,7 @@ impl Assistant {
             Intent::Delegate(task) => {
                 action = Some(Action::Delegate {
                     task: task.clone(),
-                    topic: "wa/v1/c2/torrance/cc/task".into(),
+                    topic: format!("{}/cc/task", mqtt_root()),
                 });
                 (
                     format!(
@@ -1871,6 +1871,11 @@ fn parse_order(low: &str) -> Option<OrderDraft> {
         price,
         region,
     })
+}
+
+fn mqtt_root() -> String {
+    std::env::var("NAUTILUS_MQTT_ROOT")
+        .unwrap_or_else(|_| "wa/v1/c2/torrance".into())
 }
 
 fn shorten_text(text: &str) -> String {

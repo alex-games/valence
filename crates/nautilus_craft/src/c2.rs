@@ -38,11 +38,14 @@ fn run(broker: String, client_id: String, ai: Arc<Mutex<Assistant>>) {
     options.set_keep_alive(std::time::Duration::from_secs(20));
     let (client, mut connection) = Client::new(options, 64);
 
+    // The root is overridable so a validation run on a public broker can use
+    // a unique namespace instead of mixing with every other `torrance`.
+    let root = std::env::var("NAUTILUS_MQTT_ROOT").unwrap_or_else(|_| ROOT.into());
     client
-        .subscribe(format!("{ROOT}/assistant/intent"), QoS::AtLeastOnce)
+        .subscribe(format!("{root}/assistant/intent"), QoS::AtLeastOnce)
         .ok();
     client
-        .subscribe(format!("{ROOT}/cc/cmd"), QoS::AtLeastOnce)
+        .subscribe(format!("{root}/cc/cmd"), QoS::AtLeastOnce)
         .ok();
 
     for event in connection.iter() {
@@ -117,7 +120,7 @@ fn run(broker: String, client_id: String, ai: Arc<Mutex<Assistant>>) {
                 });
                 client
                     .publish(
-                        format!("{ROOT}/commerce/order"),
+                        format!("{root}/commerce/order"),
                         QoS::AtLeastOnce,
                         false,
                         body.to_string(),
@@ -129,7 +132,7 @@ fn run(broker: String, client_id: String, ai: Arc<Mutex<Assistant>>) {
         let payload = serde_json::to_vec(&reply).unwrap_or_default();
         client
             .publish(
-                format!("{ROOT}/assistant/reply"),
+                format!("{root}/assistant/reply"),
                 QoS::AtLeastOnce,
                 false,
                 payload,
@@ -138,7 +141,7 @@ fn run(broker: String, client_id: String, ai: Arc<Mutex<Assistant>>) {
         if let Some(progress) = serde_json::to_vec(&reply.progress).ok() {
             client
                 .publish(
-                    format!("{ROOT}/player/{player}/score"),
+                    format!("{root}/player/{player}/score"),
                     QoS::AtLeastOnce,
                     true,
                     progress,

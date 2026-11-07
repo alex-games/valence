@@ -35,8 +35,17 @@ fn main() {
         c2::spawn(broker, client_id, assistant.clone());
     }
 
-    App::new()
-        .add_plugins(DefaultPlugins)
+    let mut app = App::new();
+    // A second process (the live MQTT validation) must not fight the first for
+    // 25565. The address is otherwise Valence's default.
+    if let Ok(address) = std::env::var("NAUTILUS_MC_ADDR") {
+        if let Ok(address) = address.parse() {
+            let mut settings = valence::network::NetworkSettings::default();
+            settings.address = address;
+            app.insert_resource(settings);
+        }
+    }
+    app.add_plugins(DefaultPlugins)
         .insert_resource(world::LevelResource(level))
         .insert_resource(ai::AiHandle(assistant))
         .add_systems(Startup, world::setup)
