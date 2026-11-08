@@ -167,11 +167,34 @@ case "$1" in
     sleep 1
     "$0" start
     ;;
+  unseal)
+    # Warm boot does not run init, so the host calls this after restoring the
+    # sealed Vault snapshot. It is idempotent.
+    printf "Unsealing vault: "
+    if [ ! -r "$INIT" ]; then
+        echo "FAIL (no $INIT)"
+        exit 1
+    fi
+    UNSEAL=$(INIT_PATH="$INIT" python3 -c 'import json,os;print(json.load(open(os.environ["INIT_PATH"]))["unseal_keys_b64"][0])' 2>/dev/null)
+    if [ -z "$UNSEAL" ]; then
+        echo "FAIL (no unseal key)"
+        exit 1
+    fi
+    "$DAEMON" operator unseal "$UNSEAL" >>"$LOG" 2>&1 || {
+        echo "FAIL (see $LOG)"
+        exit 1
+    }
+    if "$DAEMON" status 2>&1 | grep -q "Sealed.*true"; then
+        echo "FAIL (still sealed)"
+        exit 1
+    fi
+    echo "OK (sealed=false)"
+    ;;
   status)
     "$DAEMON" status
     ;;
   *)
-    echo "Usage: $0 {start|stop|restart|status}"
+    echo "Usage: $0 {start|stop|restart|status|unseal}"
     exit 1
     ;;
 esac

@@ -42,6 +42,9 @@ HARNESS="$ROOT/../../age-of-intellect/tools/vmrelay-harness"
 [ -d "$HARNESS" ] || HARNESS="$ROOT/../../../tools/vmrelay-harness"
 cd "$HARNESS"
 export WA_RELAY_PORT="${RELAY_PORT:-8891}"
+# The game snapshot is captured with Vault sealed. A restored unsealed Vault
+# leaves the console dead (D62); the host calls S47vault unseal after restore.
+export WA_GAME_SEAL_VAULT="${WA_GAME_SEAL_VAULT:-1}"
 ./run-snapshot.sh "$OUT" \
     "http://127.0.0.1:$PORT/vm/index.html?boot=true&console=1&memory=${MEMORY}"
 

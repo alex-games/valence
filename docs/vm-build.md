@@ -95,6 +95,11 @@ The fresh image has no player state yet, so `secret/nautilus/game/index` and
 `secret/nautilus/players` are empty by design; the first assistant turn creates
 them.
 
+**D62 — capture Vault sealed.** An unsealed Vault in a warm snapshot restores to
+an empty console. A state captured with Vault stopped or sealed returns a shell
+in 3 s. `vm/validate.sh` defaults `WA_GAME_SEAL_VAULT=1`; after restore run
+`/etc/init.d/S47vault start` (or `unseal`) before reading per-player KV.
+
 ## 4. What the image now persists
 
 - `/var/lib/vault/data` — file-backend Vault; per-player game state at
