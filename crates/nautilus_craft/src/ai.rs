@@ -24,6 +24,7 @@ use valence::inventory::HeldItem;
 use valence::message::ChatMessageEvent;
 use valence::prelude::*;
 
+use crate::sidechain::{state_hash, SidechainHandle};
 use crate::vault::VaultStateStore;
 use crate::world::{Level, NpcActor};
 
@@ -33,6 +34,9 @@ pub const QUEST_CREDITS: i64 = 25;
 
 #[derive(Resource, Clone)]
 pub struct AiHandle(pub Arc<Mutex<Assistant>>);
+
+#[derive(Resource, Clone)]
+pub struct SidechainResource(pub Option<SidechainHandle>);
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -377,10 +381,12 @@ pub struct Assistant {
     /// Vault KV v2 is the authoritative store when configured; the file is the
     /// local mirror and the offline fallback.
     vault: Option<VaultStateStore>,
+    /// PostgreSQL sidechain writer; optional when running file-only.
+    sidechain: Option<SidechainHandle>,
 }
 
 impl Assistant {
-    pub fn new(level: Level) -> Self {
+    pub fn new(level: Level, sidechain: Option<SidechainHandle>) -> Self {
         let state_path = std::env::var("NAUTILUS_STATE")
             .ok()
             .map(PathBuf::from)
@@ -389,7 +395,7 @@ impl Assistant {
             .ok()
             .map(PathBuf::from)
             .or_else(|| Some(PathBuf::from("nautilus-audit.jsonl")));
-        let mut assistant = Self::with_paths(level, state_path, audit_path);
+        let mut assistant = Self::with_paths(level, state_path, audit_path, sidechain);
         if let Some(vault) = VaultStateStore::from_env() {
             let loaded = vault
                 .load()
@@ -411,10 +417,15 @@ impl Assistant {
 
     #[cfg(test)]
     pub fn in_memory(level: Level) -> Self {
-        Self::with_paths(level, None, None)
+        Self::with_paths(level, None, None, None)
     }
 
-    fn with_paths(level: Level, state_path: Option<PathBuf>, audit_path: Option<PathBuf>) -> Self {
+    fn with_paths(
+        level: Level,
+        state_path: Option<PathBuf>,
+        audit_path: Option<PathBuf>,
+        sidechain: Option<SidechainHandle>,
+    ) -> Self {
         let mut data = Persisted {
             version: 1,
             revision: 0,
@@ -437,6 +448,7 @@ impl Assistant {
             state_path,
             audit_path,
             vault: None,
+            sidechain,
         }
     }
 
@@ -1702,6 +1714,13 @@ impl Assistant {
                 let _ = vault.put_path(VAULT_AUDIT, &audit);
             }
         }
+        if let Some(sidechain) = &self.sidechain {
+            for (pid, player) in &self.data.players {
+                if let Ok(state) = serde_json::to_string(player) {
+                    sidechain.record_state(pid, self.data.revision, &state_hash(&state));
+                }
+            }
+        }
     }
 }
 
@@ -2058,6 +2077,7 @@ pub fn place_system(
     mut layers: Query<&mut ChunkLayer>,
     mut events: EventReader<InteractBlockEvent>,
     ai: Res<AiHandle>,
+    sidechain: Res<SidechainResource>,
 ) {
     let mut layer = layers.single_mut();
     for event in events.read() {
@@ -2086,7 +2106,17 @@ pub fn place_system(
             }
         }
         let real_pos = event.position.get_in_direction(event.face);
-        layer.set_block(real_pos, block_kind.to_state());
+        let state = block_kind.to_state();
+        layer.set_block(real_pos, state);
+        if let Some(sidechain) = &sidechain.0 {
+            sidechain.record_edit(
+                real_pos.x,
+                real_pos.y,
+                real_pos.z,
+                i32::from(state.to_raw()),
+                &username.0,
+            );
+        }
 
         let lines =
             ai.0.lock()
@@ -2103,6 +2133,7 @@ pub fn break_system(
     mut layers: Query<&mut ChunkLayer>,
     mut events: EventReader<DiggingEvent>,
     ai: Res<AiHandle>,
+    sidechain: Res<SidechainResource>,
 ) {
     let mut layer = layers.single_mut();
     for event in events.read() {
@@ -2113,6 +2144,15 @@ pub fn break_system(
         let Ok((username, mut client)) = clients.get_mut(event.client) else {
             continue;
         };
+        if let Some(sidechain) = &sidechain.0 {
+            sidechain.record_edit(
+                event.position.x,
+                event.position.y,
+                event.position.z,
+                0,
+                &username.0,
+            );
+        }
         let lines =
             ai.0.lock()
                 .expect("assistant mutex")

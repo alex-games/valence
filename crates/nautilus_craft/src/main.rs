@@ -18,13 +18,18 @@ use valence::prelude::*;
 mod ai;
 #[cfg(feature = "c2")]
 mod c2;
+mod sidechain;
 mod vault;
 mod web;
 mod world;
 
 fn main() {
     let level = world::Level::load();
-    let assistant = Arc::new(Mutex::new(ai::Assistant::new(level.clone())));
+    let sidechain = sidechain::SidechainHandle::from_env();
+    let assistant = Arc::new(Mutex::new(ai::Assistant::new(
+        level.clone(),
+        sidechain.clone(),
+    )));
 
     let web_addr = std::env::var("NAUTILUS_WEB_ADDR").unwrap_or_else(|_| "127.0.0.1:8082".into());
     web::spawn(web_addr, assistant.clone(), level.clone());
@@ -49,6 +54,7 @@ fn main() {
     app.add_plugins(DefaultPlugins)
         .insert_resource(world::LevelResource(level))
         .insert_resource(ai::AiHandle(assistant))
+        .insert_resource(ai::SidechainResource(sidechain))
         .add_systems(Startup, world::setup)
         .add_systems(
             Update,
