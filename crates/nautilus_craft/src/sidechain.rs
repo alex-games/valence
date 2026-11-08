@@ -26,7 +26,15 @@ pub struct SidechainHandle {
 
 enum Job {
     Edit { x: i32, y: i32, z: i32, block: i32, by: String },
-    State { pid: String, revision: u64, hash: String },
+    State {
+        pid: String,
+        name: String,
+        revision: u64,
+        hash: String,
+        quests: i32,
+        tokens: i32,
+        day: i64,
+    },
 }
 
 impl SidechainHandle {
@@ -60,11 +68,24 @@ impl SidechainHandle {
         });
     }
 
-    pub fn record_state(&self, pid: &str, revision: u64, hash: &str) {
+    pub fn record_state(
+        &self,
+        pid: &str,
+        name: &str,
+        revision: u64,
+        hash: &str,
+        quests: i32,
+        tokens: i32,
+        day: i64,
+    ) {
         let _ = self.tx.send(Job::State {
             pid: pid.to_owned(),
+            name: name.to_owned(),
             revision,
             hash: hash.to_owned(),
+            quests,
+            tokens,
+            day,
         });
     }
 
@@ -135,14 +156,25 @@ fn writer(rx: Receiver<Job>, url: String) {
         };
         let jobs = std::mem::take(&mut pending);
         for job in jobs {
-            let result = match job {
-                Job::Edit { x, y, z, block, by } => db.execute(
-                    "INSERT INTO game_edits(world,x,y,z,block,updated_by) VALUES($1,$2,$3,$4,$5,$6)
-                     ON CONFLICT(world,x,y,z) DO UPDATE SET block=EXCLUDED.block,
-                       updated_by=EXCLUDED.updated_by, updated_at=now()",
-                    &[&WORLD, &x, &y, &z, &block, &by],
-                ),
-                Job::State { pid, revision, hash } => {
+            let failed = match job {
+                Job::Edit { x, y, z, block, by } => {
+                    let result = db.execute(
+                        "INSERT INTO game_edits(world,x,y,z,block,updated_by) VALUES($1,$2,$3,$4,$5,$6)
+                         ON CONFLICT(world,x,y,z) DO UPDATE SET block=EXCLUDED.block,
+                           updated_by=EXCLUDED.updated_by, updated_at=now()",
+                        &[&WORLD, &x, &y, &z, &block, &by],
+                    );
+                    result.is_err()
+                },
+                Job::State {
+                    pid,
+                    name,
+                    revision,
+                    hash,
+                    quests,
+                    tokens,
+                    day,
+                } => {
                     let at = now();
                     let _ = db.execute(
                         "INSERT INTO game_state_index(pid,revision,state_hash,updated_at)
@@ -151,19 +183,120 @@ fn writer(rx: Receiver<Job>, url: String) {
                            state_hash=EXCLUDED.state_hash, updated_at=EXCLUDED.updated_at",
                         &[&pid, &(revision as i64), &hash, &at],
                     );
-                    let payload = json!({"revision": revision, "hash": hash});
-                    db.execute(
+                    let payload = json!({
+                        "revision": revision, "hash": hash, "day": day,
+                        "quests": quests, "tokens": tokens
+                    });
+                    let _ = db.execute(
                         "INSERT INTO game_events(pid,kind,payload,at) VALUES($1,'state',$2,$3)",
                         &[&pid, &payload, &at],
-                    )
+                    );
+                    let _ = db.execute(
+                        "INSERT INTO game_accounts(player_id,name,quests,tokens,updated_at)
+                         VALUES($1,$2,$3,$4,now())
+                         ON CONFLICT(player_id) DO UPDATE SET name=EXCLUDED.name,
+                           quests=EXCLUDED.quests, tokens=EXCLUDED.tokens,
+                           updated_at=now()",
+                        &[&pid, &name, &quests, &tokens],
+                    );
+
+                    // One shard sidechain per consistent-hash lane; the state hash is
+                    // the leaf root, the revision is the append height.
+                    let shard = shard_of(&hash);
+                    let prev: Option<(i64, String)> = db
+                        .query_opt(
+                            "SELECT height,hash FROM game_side_blocks
+                             WHERE world=$1 AND shard=$2 ORDER BY height DESC LIMIT 1",
+                            &[&WORLD, &shard],
+                        )
+                        .ok()
+                        .flatten()
+                        .map(|row| (row.get(0), row.get(1)));
+                    let height = prev.as_ref().map(|(h, _)| h + 1).unwrap_or(1);
+                    let parent = prev.map(|(_, h)| h).unwrap_or_default();
+                    let _ = db.execute(
+                        "INSERT INTO game_side_blocks(world,shard,height,hash,parent,root,edits,at)
+                         VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+                         ON CONFLICT(world,shard,height) DO NOTHING",
+                        &[
+                            &WORLD,
+                            &shard,
+                            &height,
+                            &hash,
+                            &parent,
+                            &hash,
+                            &(revision as i64),
+                            &at,
+                        ],
+                    );
+
+                    let tips = db
+                        .query(
+                            "SELECT shard,height,hash,root FROM game_side_blocks s
+                             WHERE world=$1 AND height = (
+                               SELECT max(height) FROM game_side_blocks t
+                               WHERE t.world=s.world AND t.shard=s.shard
+                             ) ORDER BY shard",
+                            &[&WORLD],
+                        )
+                        .unwrap_or_default();
+                    if !tips.is_empty() {
+                        let roots: Vec<serde_json::Value> = tips
+                            .iter()
+                            .map(|row| {
+                                json!({
+                                    "shard": row.get::<_, i32>(0),
+                                    "height": row.get::<_, i64>(1),
+                                    "hash": row.get::<_, String>(2),
+                                    "root": row.get::<_, String>(3),
+                                })
+                            })
+                            .collect();
+                        let roots_json = serde_json::to_string(&roots).unwrap_or_else(|_| "[]".into());
+                        let last: Option<(i64, String)> = db
+                            .query_opt(
+                                "SELECT height,hash FROM game_anchors
+                                 WHERE world=$1 ORDER BY height DESC LIMIT 1",
+                                &[&WORLD],
+                            )
+                            .ok()
+                            .flatten()
+                            .map(|row| (row.get(0), row.get(1)));
+                        let a_height = last.as_ref().map(|(h, _)| h + 1).unwrap_or(1);
+                        let a_parent = last.map(|(_, h)| h).unwrap_or_default();
+                        let a_hash = anchor_hash(a_height, &a_parent, &roots_json, at);
+                        let _ = db.execute(
+                            "INSERT INTO game_anchors(world,height,hash,parent,roots,at)
+                             VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(world,height) DO NOTHING",
+                            &[
+                                &WORLD,
+                                &a_height,
+                                &a_hash,
+                                &a_parent,
+                                &serde_json::Value::Array(roots),
+                                &at,
+                            ],
+                        );
+                    }
+                    false
                 }
             };
-            if result.is_err() {
+            if failed {
                 client = None;
                 break;
             }
         }
     }
+}
+
+fn shard_of(hash: &str) -> i32 {
+    i32::from(u8::from_str_radix(&hash[..2.min(hash.len())], 16).unwrap_or(0) % 4)
+}
+
+fn anchor_hash(height: i64, parent: &str, roots_json: &str, at: i64) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(format!("{height}|{parent}|{roots_json}|{at}").as_bytes());
+    format!("{:x}", hasher.finalize())
 }
 
 pub fn state_hash(player_json: &str) -> String {
@@ -174,7 +307,7 @@ pub fn state_hash(player_json: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::state_hash;
+    use super::{anchor_hash, shard_of, state_hash};
 
     #[test]
     fn state_hash_is_stable_and_player_specific() {
@@ -184,6 +317,17 @@ mod tests {
         assert_eq!(a, b);
         assert_ne!(a, c);
         assert_eq!(a.len(), 64);
+    }
+
+    #[test]
+    fn shard_and_anchor_are_deterministic() {
+        let h = state_hash("{\"name\":\"a\"}");
+        assert!((0..4).contains(&shard_of(&h)));
+        assert_eq!(shard_of(&h), shard_of(&h));
+        let a = anchor_hash(1, "", "[{\"shard\":0}]", 10);
+        let b = anchor_hash(1, "", "[{\"shard\":0}]", 10);
+        assert_eq!(a, b);
+        assert_ne!(a, anchor_hash(2, &a, "[{\"shard\":0}]", 10));
     }
 }
 

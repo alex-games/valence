@@ -1717,7 +1717,15 @@ impl Assistant {
         if let Some(sidechain) = &self.sidechain {
             for (pid, player) in &self.data.players {
                 if let Ok(state) = serde_json::to_string(player) {
-                    sidechain.record_state(pid, self.data.revision, &state_hash(&state));
+                    sidechain.record_state(
+                        pid,
+                        &player.name,
+                        self.data.revision,
+                        &state_hash(&state),
+                        player.quests.values().filter(|v| **v).count() as i32,
+                        player.tokens.len() as i32,
+                        player.day,
+                    );
                 }
             }
         }
