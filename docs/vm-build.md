@@ -70,6 +70,7 @@ present.
 | per-player Vault state + revision | 2026-11-07 | 11,855 s | exit 0, 226 MB, 12,540 blobs |
 | S47 init validation | 2026-11-07 | 11,864 s | exit 0, 226 MB, 12,540 blobs |
 | S47 human-output recovery + sidechain | 2026-11-08 | 12,473 s | exit 0, 226 MB, 12,540 blobs |
+| accounts/shards/anchors producer | 2026-11-08 | in progress | sixth image |
 | cold boot (sidechain build) | 2026-11-08 | — | Vault **unsealed**, KV enabled, PostgreSQL tables created |
 
 The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
