@@ -100,6 +100,10 @@ an empty console. A state captured with Vault stopped or sealed returns a shell
 in 3 s. `vm/validate.sh` defaults `WA_GAME_SEAL_VAULT=1`; after restore run
 `/etc/init.d/S47vault start` (or `unseal`) before reading per-player KV.
 
+Verified with state8: shell 3 s, unseal `Sealed false`, POST `/api/assistant`
+created `restore-p1`, Vault index `{"players":["restore-p1"],"revision":1}`,
+player state version 1, and `game_state_index` revision 1.
+
 ## 4. What the image now persists
 
 - `/var/lib/vault/data` — file-backend Vault; per-player game state at
