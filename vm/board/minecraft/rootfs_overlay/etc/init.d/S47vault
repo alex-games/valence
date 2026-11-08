@@ -22,6 +22,34 @@ INIT="$STATE/init.json"
 TOKEN_FILE="$STATE/root-token"
 export VAULT_ADDR=http://127.0.0.1:8200
 
+# Normalize either the JSON form or Vault's human `operator init` output into
+# the one JSON shape this script stores. Vault 1.17.0-beta1 ignored
+# `-format=json` in this buildroot, so the text form is the real one.
+normalize_init() {
+    f="${1:-$INIT}"
+    python3 - "$f" <<'PY'
+import json, re, sys
+raw = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+try:
+    data = json.loads(raw)
+    print(json.dumps({
+        "root_token": data["root_token"],
+        "unseal_keys_b64": [data["unseal_keys_b64"][0]],
+    }))
+    raise SystemExit(0)
+except Exception:
+    pass
+unseal = re.search(r"Unseal Key 1:\s*(\S+)", raw)
+token = re.search(r"Initial Root Token:\s*(\S+)", raw)
+if not unseal or not token:
+    raise SystemExit(1)
+print(json.dumps({
+    "root_token": token.group(1),
+    "unseal_keys_b64": [unseal.group(1)],
+}))
+PY
+}
+
 init_valid() {
     f="${1:-$INIT}"
     [ -s "$f" ] || return 1
@@ -44,8 +72,17 @@ start_vault() {
     # next to non-empty storage is unrecoverable by design, so move that storage
     # aside and start a fresh demo store rather than serving a sealed one.
     if [ -f "$INIT" ] && ! init_valid; then
-        echo "invalid init file; moving the old file aside"
-        mv "$INIT" "$INIT.bad.$(date +%s)" 2>/dev/null || rm -f "$INIT"
+        echo "init file is not JSON; trying the human operator-init form"
+        if normalize_init "$INIT" >"$INIT.recovered" 2>/dev/null && init_valid "$INIT.recovered"; then
+            mv "$INIT" "$INIT.bad.$(date +%s)"
+            mv "$INIT.recovered" "$INIT"
+            chmod 600 "$INIT"
+            echo "recovered the unseal key and root token from the human output"
+        else
+            rm -f "$INIT.recovered"
+            echo "invalid init file; moving the old file aside"
+            mv "$INIT" "$INIT.bad.$(date +%s)" 2>/dev/null || rm -f "$INIT"
+        fi
     fi
     if [ ! -f "$INIT" ] && [ -d "$STATE/data" ] && [ -n "$(ls -A "$STATE/data" 2>/dev/null)" ]; then
         echo "no unseal key for existing storage; moving data aside"
@@ -74,9 +111,14 @@ start_vault() {
             return 1
         }
         if ! init_valid "$tmp"; then
-            mv "$tmp" "$INIT.bad.init" 2>/dev/null || true
-            echo "FAIL (init output is not JSON; see $LOG)"
-            return 1
+            if normalize_init "$tmp" >"$tmp.norm" 2>/dev/null && init_valid "$tmp.norm"; then
+                mv "$tmp.norm" "$tmp"
+            else
+                mv "$tmp" "$INIT.bad.init" 2>/dev/null || true
+                rm -f "$tmp.norm"
+                echo "FAIL (init output is not JSON or operator-init text; see $LOG)"
+                return 1
+            fi
         fi
         mv "$tmp" "$INIT"
         chmod 600 "$INIT"
