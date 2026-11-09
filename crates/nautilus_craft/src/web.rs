@@ -265,6 +265,39 @@ fn handle(mut stream: TcpStream, ai: Arc<Mutex<Assistant>>, level: Level) {
                 }
             }
         }
+        ("POST", "/api/outbox/replay") => {
+            let text = String::from_utf8_lossy(&body);
+            let value: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+            let seqs: Vec<i64> = value
+                .get("seqs")
+                .and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|v| v.as_i64()).collect())
+                .unwrap_or_default();
+            match crate::sidechain::replay_outbox(&seqs) {
+                Ok(replayed) => {
+                    let payload = json!({ "replayed": replayed }).to_string();
+                    write_response(
+                        &mut stream,
+                        "200 OK",
+                        "application/json",
+                        payload.as_bytes(),
+                        cors,
+                        head_only,
+                    );
+                }
+                Err(e) => {
+                    let payload = json!({ "error": e }).to_string();
+                    write_response(
+                        &mut stream,
+                        "503 Service Unavailable",
+                        "application/json",
+                        payload.as_bytes(),
+                        cors,
+                        head_only,
+                    );
+                }
+            }
+        }
         ("POST", "/api/assistant") => {
             let text = String::from_utf8_lossy(&body);
             let value: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();

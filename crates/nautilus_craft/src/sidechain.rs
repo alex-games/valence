@@ -140,6 +140,21 @@ pub fn ack_outbox(seqs: &[i64]) -> Result<u64, String> {
     .map_err(|e| e.to_string())
 }
 
+/// Mark delivered rows queued again. This is an operator/consumer recovery
+/// path: a consumer that stored a row but failed before acting on it can
+/// replay it. Only `sent` rows change, so replaying twice is a no-op.
+pub fn replay_outbox(seqs: &[i64]) -> Result<u64, String> {
+    if seqs.is_empty() {
+        return Ok(0);
+    }
+    let mut db = Client::connect(&db_url_from_env(), NoTls).map_err(|e| e.to_string())?;
+    db.execute(
+        "UPDATE game_outbox SET status='queued' WHERE seq = ANY($1) AND status='sent'",
+        &[&seqs],
+    )
+    .map_err(|e| e.to_string())
+}
+
 fn init(client: &mut Client) -> Result<(), postgres::Error> {
     client.batch_execute(
         "CREATE TABLE IF NOT EXISTS game_edits (
