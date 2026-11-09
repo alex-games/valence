@@ -71,7 +71,7 @@ present.
 | S47 init validation | 2026-11-07 | 11,864 s | exit 0, 226 MB, 12,540 blobs |
 | S47 human-output recovery + sidechain | 2026-11-08 | 12,473 s | exit 0, 226 MB, 12,540 blobs |
 | accounts/shards/anchors producer | 2026-11-08 | 12,227 s | exit 0, 226 MB, six-state sidechain |
-| D77 `edits int4` payload | 2026-11-08 | running | seventh image, started 20:29 |
+| D77 `edits int4` + outbox payload | 2026-11-08 | running | seventh image, started 20:40 |
 | cold boot (sidechain build) | 2026-11-08 | — | Vault **unsealed**, KV enabled, PostgreSQL tables created |
 
 The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
