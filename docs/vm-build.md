@@ -104,9 +104,11 @@ fresh sealed capture (state6d) reached a shell in **3 s**. After unseal,
 - `game_state_index` → revision 1
 - `game_accounts` → `restore-p1`
 
-`game_side_blocks` and `game_anchors` are **empty** on this run: the account row
-is written, but the shard/anchor producer did not persist its rows. That is the
-next defect to fix; the Vault/state/account path is proven.
+`game_side_blocks` and `game_anchors` are **empty** on this run. That is D77:
+`game_side_blocks.edits` is `int4`, the writer passed `i64` and discarded the
+`ToSql` error, so the anchor step saw an empty tip list. Fixed in source at
+`2243ee7` (cast to `i32`, log every sidechain error) and proven against a real
+PostgreSQL 16 container; the seventh image is the remaining end-to-end proof.
 
 **D62 — capture Vault sealed.** An unsealed Vault in a warm snapshot restores to
 an empty console. A state captured with Vault stopped or sealed returns a shell
