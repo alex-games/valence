@@ -203,6 +203,68 @@ fn handle(mut stream: TcpStream, ai: Arc<Mutex<Assistant>>, level: Level) {
                 head_only,
             );
         }
+        ("GET" | "HEAD", "/api/outbox") => {
+            let limit = query_value(query, "limit")
+                .and_then(|v| v.parse::<i64>().ok())
+                .unwrap_or(50);
+            match crate::sidechain::read_outbox(limit) {
+                Ok(rows) => {
+                    let payload = json!({ "rows": rows }).to_string();
+                    write_response(
+                        &mut stream,
+                        "200 OK",
+                        "application/json",
+                        payload.as_bytes(),
+                        cors,
+                        head_only,
+                    );
+                }
+                Err(e) => {
+                    let payload = json!({ "error": e }).to_string();
+                    write_response(
+                        &mut stream,
+                        "503 Service Unavailable",
+                        "application/json",
+                        payload.as_bytes(),
+                        cors,
+                        head_only,
+                    );
+                }
+            }
+        }
+        ("POST", "/api/outbox/ack") => {
+            let text = String::from_utf8_lossy(&body);
+            let value: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+            let seqs: Vec<i64> = value
+                .get("seqs")
+                .and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|v| v.as_i64()).collect())
+                .unwrap_or_default();
+            match crate::sidechain::ack_outbox(&seqs) {
+                Ok(acked) => {
+                    let payload = json!({ "acked": acked }).to_string();
+                    write_response(
+                        &mut stream,
+                        "200 OK",
+                        "application/json",
+                        payload.as_bytes(),
+                        cors,
+                        head_only,
+                    );
+                }
+                Err(e) => {
+                    let payload = json!({ "error": e }).to_string();
+                    write_response(
+                        &mut stream,
+                        "503 Service Unavailable",
+                        "application/json",
+                        payload.as_bytes(),
+                        cors,
+                        head_only,
+                    );
+                }
+            }
+        }
         ("POST", "/api/assistant") => {
             let text = String::from_utf8_lossy(&body);
             let value: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();

@@ -40,14 +40,7 @@ enum Job {
 impl SidechainHandle {
     /// `None` when PostgreSQL is not configured; file-only play is still valid.
     pub fn from_env() -> Option<Self> {
-        let url = std::env::var("NAUTILUS_DB").unwrap_or_else(|_| {
-            let host = std::env::var("PGHOST").unwrap_or_else(|_| "127.0.0.1".into());
-            let port = std::env::var("PGPORT").unwrap_or_else(|_| "5432".into());
-            let user = std::env::var("PGUSER").unwrap_or_else(|_| "craft".into());
-            let pass = std::env::var("PGPASSWORD").unwrap_or_else(|_| "craft".into());
-            let db = std::env::var("PGDATABASE").unwrap_or_else(|_| "nautilus_craft".into());
-            format!("host={host} port={port} user={user} password={pass} dbname={db} connect_timeout=2")
-        });
+        let url = db_url_from_env();
         let mut client = Client::connect(&url, NoTls).ok()?;
         init(&mut client).ok()?;
         let (tx, rx) = mpsc::channel();
@@ -88,6 +81,63 @@ impl SidechainHandle {
             day,
         });
     }
+}
+
+/// The PostgreSQL URL, shared by the writer, the outbox reader and tests.
+pub(crate) fn db_url_from_env() -> String {
+    std::env::var("NAUTILUS_DB").unwrap_or_else(|_| {
+        let host = std::env::var("PGHOST").unwrap_or_else(|_| "127.0.0.1".into());
+        let port = std::env::var("PGPORT").unwrap_or_else(|_| "5432".into());
+        let user = std::env::var("PGUSER").unwrap_or_else(|_| "craft".into());
+        let pass = std::env::var("PGPASSWORD").unwrap_or_else(|_| "craft".into());
+        let db = std::env::var("PGDATABASE").unwrap_or_else(|_| "nautilus_craft".into());
+        format!("host={host} port={port} user={user} password={pass} dbname={db} connect_timeout=2")
+    })
+}
+
+/// One queued outbox row, as returned by `GET /api/outbox`.
+#[derive(serde::Serialize)]
+pub struct OutboxRow {
+    pub seq: i64,
+    pub topic: String,
+    pub payload: serde_json::Value,
+    pub created_at: i64,
+}
+
+/// Pull up to `limit` queued rows. A short-lived connection per call keeps the
+/// HTTP thread independent of the sidechain writer; outbox polling is low rate.
+pub fn read_outbox(limit: i64) -> Result<Vec<OutboxRow>, String> {
+    let mut db = Client::connect(&db_url_from_env(), NoTls).map_err(|e| e.to_string())?;
+    let rows = db
+        .query(
+            "SELECT seq,topic,payload,created_at FROM game_outbox
+             WHERE status='queued' ORDER BY seq LIMIT $1",
+            &[&limit.clamp(1, 500)],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(rows
+        .iter()
+        .map(|row| OutboxRow {
+            seq: row.get(0),
+            topic: row.get(1),
+            payload: row.get(2),
+            created_at: row.get(3),
+        })
+        .collect())
+}
+
+/// Mark rows delivered. Only `queued` rows change, so an overlapping ack is
+/// idempotent and cannot erase a later event that reused a seq.
+pub fn ack_outbox(seqs: &[i64]) -> Result<u64, String> {
+    if seqs.is_empty() {
+        return Ok(0);
+    }
+    let mut db = Client::connect(&db_url_from_env(), NoTls).map_err(|e| e.to_string())?;
+    db.execute(
+        "UPDATE game_outbox SET status='sent' WHERE seq = ANY($1) AND status='queued'",
+        &[&seqs],
+    )
+    .map_err(|e| e.to_string())
 }
 
 fn init(client: &mut Client) -> Result<(), postgres::Error> {
@@ -348,7 +398,21 @@ pub fn state_hash(player_json: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{anchor_hash, shard_of, state_hash};
+    use super::{anchor_hash, shard_of, state_hash, OutboxRow};
+
+    #[test]
+    fn outbox_row_keeps_the_topic_and_payload_shape() {
+        let row = OutboxRow {
+            seq: 3,
+            topic: "game.state.outbox-p1".into(),
+            payload: serde_json::json!({"revision": 1, "pid": "outbox-p1"}),
+            created_at: 10,
+        };
+        let value = serde_json::to_value(&row).expect("serialize outbox row");
+        assert_eq!(value["seq"], 3);
+        assert_eq!(value["topic"], "game.state.outbox-p1");
+        assert_eq!(value["payload"]["revision"], 1);
+    }
 
     #[test]
     fn state_hash_is_stable_and_player_specific() {
