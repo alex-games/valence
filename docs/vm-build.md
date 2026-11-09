@@ -72,7 +72,7 @@ present.
 | S47 human-output recovery + sidechain | 2026-11-08 | 12,473 s | exit 0, 226 MB, 12,540 blobs |
 | accounts/shards/anchors producer | 2026-11-08 | 12,227 s | exit 0, 226 MB, six-state sidechain |
 | D77 `edits int4` + outbox payload | 2026-11-08 | 12,279 s | exit 0, 226 MB; sealed restore PASS, 1 shard / 1 anchor / 1 outbox row |
-| scoped Vault token | 2026-11-08 | running | eighth image payload |
+| scoped Vault token | 2026-11-09 | 12,551 s | exit 0, 226 MB; sealed restore 10/10 PASS, game-token denied policy list |
 | cold boot (sidechain build) | 2026-11-08 | — | Vault **unsealed**, KV enabled, PostgreSQL tables created |
 
 The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
@@ -129,6 +129,27 @@ game_side_blocks → 1 (shard row written)
 game_anchors     → 1
 game_outbox      → 1 queued game.state.restore-p1
 ```
+
+**Eighth image status: validated 2026-11-09.** Build `12,551 s`, exit 0,
+226 MB. Cold capture `state8b` (868,888,252 bytes raw / 42 MB zst,
+sha256 `c4bd908b…cde0`); restore shell **0 s**, `restore-proof: PASS` for all
+ten checks:
+
+```
+/etc/init.d/S47vault unseal → OK (sealed=false; scoped token)
+vault status → Sealed false
+s47: grep -c game-token /etc/init.d/S47vault → 2
+game-token tokenlen=95; KV read succeeds; vault policy list is denied
+POST /api/assistant restore-p1 → "intent":"status"
+game_state_index → restore-p1 | revision 1 | 676d088eae0d0824
+game_accounts → restore-p1
+game_side_blocks → 1
+game_anchors → 1
+game_outbox → 1 queued game.state.restore-p1
+```
+
+The game server therefore runs with the scoped token, not the root token, on
+the built image.
 
 **Outbox producer.** The same writer now appends to `game_outbox`:
 
