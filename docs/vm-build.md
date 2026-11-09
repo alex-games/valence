@@ -95,11 +95,18 @@ The fresh image has no player state yet, so `secret/nautilus/game/index` and
 `secret/nautilus/players` are empty by design; the first assistant turn creates
 them.
 
-**Sixth image status:** the accounts/shard/anchor binary is in the payload
-(`game_side_blocks`/`game_anchors` strings present). A fresh **sealed** capture
-(state6d) reached a shell in **3 s**, so the D62 sealed-capture path holds on the
-sixth image too. The accounts/shard/anchor rows after a restore are not yet
-asserted; that is the next proof.
+**Sixth image status:** the accounts/shard/anchor binary is in the payload and a
+fresh sealed capture (state6d) reached a shell in **3 s**. After unseal,
+`POST /api/assistant` wrote:
+
+- `secret/nautilus/game/index` → `{"players":["restore-p1"],"revision":1}`
+- `secret/nautilus/players/restore-p1/state` → version 1
+- `game_state_index` → revision 1
+- `game_accounts` → `restore-p1`
+
+`game_side_blocks` and `game_anchors` are **empty** on this run: the account row
+is written, but the shard/anchor producer did not persist its rows. That is the
+next defect to fix; the Vault/state/account path is proven.
 
 **D62 — capture Vault sealed.** An unsealed Vault in a warm snapshot restores to
 an empty console. A state captured with Vault stopped or sealed returns a shell
