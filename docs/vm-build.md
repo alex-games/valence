@@ -70,7 +70,7 @@ present.
 | per-player Vault state + revision | 2026-11-07 | 11,855 s | exit 0, 226 MB, 12,540 blobs |
 | S47 init validation | 2026-11-07 | 11,864 s | exit 0, 226 MB, 12,540 blobs |
 | S47 human-output recovery + sidechain | 2026-11-08 | 12,473 s | exit 0, 226 MB, 12,540 blobs |
-| accounts/shards/anchors producer | 2026-11-08 | in progress | sixth image |
+| accounts/shards/anchors producer | 2026-11-08 | 12,227 s | exit 0, 226 MB, six-state sidechain |
 | cold boot (sidechain build) | 2026-11-08 | — | Vault **unsealed**, KV enabled, PostgreSQL tables created |
 
 The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
@@ -94,6 +94,11 @@ game_accounts, game_anchors, game_edits, game_state_index, game_events, ...
 The fresh image has no player state yet, so `secret/nautilus/game/index` and
 `secret/nautilus/players` are empty by design; the first assistant turn creates
 them.
+
+**Sixth image status:** the accounts/shard/anchor binary is in the payload
+(`game_side_blocks`/`game_anchors` strings present) and the cold capture completed,
+but the follow-up warm/cold probe did not reach a shell. The image is built, not
+validated; the state8/build5 proof below remains the D62 evidence.
 
 **D62 — capture Vault sealed.** An unsealed Vault in a warm snapshot restores to
 an empty console. A state captured with Vault stopped or sealed returns a shell
