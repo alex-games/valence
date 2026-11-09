@@ -96,9 +96,10 @@ The fresh image has no player state yet, so `secret/nautilus/game/index` and
 them.
 
 **Sixth image status:** the accounts/shard/anchor binary is in the payload
-(`game_side_blocks`/`game_anchors` strings present) and the cold capture completed,
-but the follow-up warm/cold probe did not reach a shell. The image is built, not
-validated; the state8/build5 proof below remains the D62 evidence.
+(`game_side_blocks`/`game_anchors` strings present). A fresh **sealed** capture
+(state6d) reached a shell in **3 s**, so the D62 sealed-capture path holds on the
+sixth image too. The accounts/shard/anchor rows after a restore are not yet
+asserted; that is the next proof.
 
 **D62 — capture Vault sealed.** An unsealed Vault in a warm snapshot restores to
 an empty console. A state captured with Vault stopped or sealed returns a shell
