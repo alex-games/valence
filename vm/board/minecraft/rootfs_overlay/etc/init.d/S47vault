@@ -9,9 +9,11 @@
 # an empty Vault and every player would lose their state. The first boot
 # initialises Vault and unseals it; later boots read the same init file.
 #
-# This is still a demo posture: the unseal key and root token live on the guest
-# (0600), and the listener is loopback-only. A real deployment uses a separate
-# unseal custodian and TLS.
+# The game server does not get the root token: S47 creates a scoped token that
+# can only touch secret/data/nautilus/* and stores it at game-token (0600). The
+# root token remains on the guest (0600) for S47's own policy/token
+# administration, so this is still a demo posture: a real deployment uses a
+# separate unseal custodian and TLS.
 #
 DAEMON=/usr/bin/vault
 PID=/var/run/vault.pid
@@ -20,6 +22,8 @@ CONFIG=/etc/vault/vault.hcl
 STATE=/var/lib/vault
 INIT="$STATE/init.json"
 TOKEN_FILE="$STATE/root-token"
+GAME_TOKEN_FILE="$STATE/game-token"
+POLICY_FILE=/etc/vault/nautilus-game.hcl
 export VAULT_ADDR=http://127.0.0.1:8200
 
 # Normalize either the JSON form or Vault's human `operator init` output into
@@ -59,6 +63,65 @@ data = json.load(open(sys.argv[1]))
 assert data["root_token"]
 assert data["unseal_keys_b64"][0]
 PY
+}
+
+# The game server must not hold the root token. Create a scoped, non-expiring
+# token that can only touch the nautilus KV paths; the root token stays in
+# init.json for S47's own policy/token administration. The token file lives in
+# /var/lib and is therefore restored with the warm snapshot.
+ensure_game_token() {
+    root_token="$1"
+    mkdir -p /etc/vault
+    # Rewrite on every boot so a policy update ships with the image rather than
+    # being masked by an old file restored from the snapshot.
+    cat > "$POLICY_FILE" <<'HCL'
+path "secret/data/nautilus/*" {
+  capabilities = ["create", "read", "update", "delete", "list"]
+}
+path "secret/metadata/nautilus/*" {
+  capabilities = ["read", "list", "delete"]
+}
+HCL
+    VAULT_TOKEN="$root_token" "$DAEMON" policy write nautilus-game "$POLICY_FILE" \
+        >>"$LOG" 2>&1 || return 1
+
+    if [ -s "$GAME_TOKEN_FILE" ]; then
+        if VAULT_TOKEN=$(cat "$GAME_TOKEN_FILE") "$DAEMON" token lookup \
+            >/dev/null 2>&1; then
+            return 0
+        fi
+        echo "scoped game token is invalid; recreating"
+        rm -f "$GAME_TOKEN_FILE"
+    fi
+
+    tmp="$GAME_TOKEN_FILE.tmp"
+    VAULT_TOKEN="$root_token" "$DAEMON" token create \
+        -policy=nautilus-game -orphan -ttl=0 \
+        -display-name=nautilus-game -format=json >"$tmp" 2>>"$LOG" || {
+        rm -f "$tmp"
+        return 1
+    }
+    # Vault 1.17.0-beta1 in this buildroot can ignore -format=json, so accept
+    # both the JSON token and the human table.
+    t=$(python3 - "$tmp" <<'PY'
+import json, re, sys
+raw = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+try:
+    print(json.loads(raw)["auth"]["client_token"])
+except Exception:
+    m = re.search(r"(?m)^token\s+(\S+)$", raw)
+    if not m:
+        raise SystemExit(1)
+    print(m.group(1))
+PY
+) || {
+        rm -f "$tmp"
+        return 1
+    }
+    printf '%s\n' "$t" >"$GAME_TOKEN_FILE"
+    chmod 600 "$GAME_TOKEN_FILE"
+    rm -f "$tmp"
+    return 0
 }
 
 start_vault() {
@@ -143,6 +206,10 @@ start_vault() {
     # enabled mount returns an error that is safe to ignore.
     VAULT_TOKEN="$TOKEN" "$DAEMON" secrets enable -path=secret kv-v2 \
         >>"$LOG" 2>&1 || true
+    if ! ensure_game_token "$TOKEN"; then
+        echo "FAIL (scoped game token; see $LOG)"
+        return 1
+    fi
 
     if "$DAEMON" status 2>&1 | grep -q "Sealed.*true"; then
         echo "FAIL (still sealed; see $LOG)"
@@ -188,7 +255,12 @@ case "$1" in
         echo "FAIL (still sealed)"
         exit 1
     fi
-    echo "OK (sealed=false)"
+    TOKEN=$(INIT_PATH="$INIT" python3 -c 'import json,os;print(json.load(open(os.environ["INIT_PATH"]))["root_token"])' 2>/dev/null)
+    if [ -z "$TOKEN" ] || ! ensure_game_token "$TOKEN"; then
+        echo "FAIL (scoped game token)"
+        exit 1
+    fi
+    echo "OK (sealed=false; scoped token)"
     ;;
   status)
     "$DAEMON" status

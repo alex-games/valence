@@ -7,6 +7,7 @@
 //! This is deliberately a tiny HTTP client rather than a Vault SDK: the VM is
 //! memory-capped, Vault is loopback-only, and the only operations are one KV v2
 //! read and one write. The token is read from `VAULT_TOKEN` and never logged.
+//! In the guest that is the scoped `game-token`, not the root token.
 
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -23,14 +24,16 @@ pub struct VaultStateStore {
 impl VaultStateStore {
     /// `None` when Vault is not configured; the file store remains the fallback.
     ///
-    /// The VM's file-backend Vault is the default address, and the root token is
-    /// read from `/var/lib/vault/root-token` when the environment does not name
-    /// one. On a host, point `VAULT_ADDR`/`VAULT_TOKEN` at the dev server or leave
-    /// both unset for file-only play.
+    /// The VM's file-backend Vault is the default address. The scoped
+    /// `game-token` is preferred; the root token remains a fallback for an
+    /// older image and for a host that only has one token. On a host, point
+    /// `VAULT_ADDR`/`VAULT_TOKEN` at the dev server or leave both unset for
+    /// file-only play.
     pub fn from_env() -> Option<Self> {
         let addr = std::env::var("VAULT_ADDR").unwrap_or_else(|_| "http://127.0.0.1:8200".into());
         let token = std::env::var("VAULT_TOKEN")
             .ok()
+            .or_else(|| std::fs::read_to_string("/var/lib/vault/game-token").ok())
             .or_else(|| std::fs::read_to_string("/var/lib/vault/root-token").ok())
             .map(|token| token.trim().to_owned())
             .filter(|token| !token.is_empty())?;

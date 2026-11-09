@@ -72,6 +72,7 @@ present.
 | S47 human-output recovery + sidechain | 2026-11-08 | 12,473 s | exit 0, 226 MB, 12,540 blobs |
 | accounts/shards/anchors producer | 2026-11-08 | 12,227 s | exit 0, 226 MB, six-state sidechain |
 | D77 `edits int4` + outbox payload | 2026-11-08 | running | seventh image, started 20:40 |
+| scoped Vault token | 2026-11-08 | pending | eighth image payload |
 | cold boot (sidechain build) | 2026-11-08 | — | Vault **unsealed**, KV enabled, PostgreSQL tables created |
 
 The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
@@ -127,6 +128,21 @@ game_side_blocks: (shard 1, height 1, edits 1), (shard 1, height 2, edits 2)
 game_anchors:     height 1 (parent empty), height 2 (parent = anchor 1 hash)
 ```
 
+**Scoped Vault token.** S47 writes a `nautilus-game` policy and creates an
+orphan token at `/var/lib/vault/game-token` (`0600`); `S52minecraft` exports it
+and the Rust client prefers it over the root token. `unseal` revalidates the
+token and recreates it if `token lookup` fails. Validated against Vault 1.17.6
+in Docker:
+
+```
+kv put/get secret/nautilus/game/probe   → 200
+vault policy list                       → 403 permission denied
+kv put secret/other/x                   → 403 permission denied
+token lookup                            → token-nautilus-game
+```
+
+The seventh image predates this change; the eighth payload carries it.
+
 **D62 — capture Vault sealed.** An unsealed Vault in a warm snapshot restores to
 an empty console. A state captured with Vault stopped or sealed returns a shell
 in 3 s. `vm/validate.sh` defaults `WA_GAME_SEAL_VAULT=1`; after restore run
@@ -141,13 +157,15 @@ player state version 1, and `game_state_index` revision 1.
 - `/var/lib/vault/data` — file-backend Vault; per-player game state at
   `secret/data/nautilus/players/<pid>/state`, the index/revision, the audit and
   wallet secrets. S47 initialises once, stores the unseal key/root token `0600`,
-  and re-unseals on boot.
+  re-unseals on boot, and creates the scoped `game-token` (`0600`) the game
+  server actually uses.
 - `/var/lib/pgsql` — PostgreSQL sidechain (`game_edits`, `game_accounts`,
-  `game_side_blocks`, `game_anchors`).
+  `game_side_blocks`, `game_anchors`, `game_outbox`).
 - Both are under `/var/lib` and therefore in the warm-boot snapshot.
 
-The `-dev` Vault is gone; `nautilus-dev` is no longer the token. Read the token
-from `/var/lib/vault/root-token` in the guest.
+The `-dev` Vault is gone; `nautilus-dev` is no longer the token. The game server
+reads `/var/lib/vault/game-token`; that token can only touch
+`secret/data/nautilus/*`. Use the root token only for Vault administration.
 
 ## 5. Verify before capture
 
@@ -155,8 +173,9 @@ from `/var/lib/vault/root-token` in the guest.
 # in the guest
 wget -qO- http://127.0.0.1/healthz
 vault status
-VAULT_TOKEN=$(cat /var/lib/vault/root-token) vault kv get secret/nautilus/game/index
-VAULT_TOKEN=$(cat /var/lib/vault/root-token) vault kv get secret/nautilus/players/<pid>/state
+VAULT_TOKEN=$(cat /var/lib/vault/game-token) vault kv get secret/nautilus/game/index
+VAULT_TOKEN=$(cat /var/lib/vault/game-token) vault kv get secret/nautilus/players/<pid>/state
+VAULT_TOKEN=$(cat /var/lib/vault/game-token) vault policy list   # expect 403
 su - postgres -c "psql -d nautilus_craft -c '\\dt'"
 ```
 
