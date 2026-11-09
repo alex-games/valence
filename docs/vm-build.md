@@ -71,6 +71,7 @@ present.
 | S47 init validation | 2026-11-07 | 11,864 s | exit 0, 226 MB, 12,540 blobs |
 | S47 human-output recovery + sidechain | 2026-11-08 | 12,473 s | exit 0, 226 MB, 12,540 blobs |
 | accounts/shards/anchors producer | 2026-11-08 | 12,227 s | exit 0, 226 MB, six-state sidechain |
+| D77 `edits int4` payload | 2026-11-08 | running | seventh image, started 20:29 |
 | cold boot (sidechain build) | 2026-11-08 | — | Vault **unsealed**, KV enabled, PostgreSQL tables created |
 
 The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
@@ -109,6 +110,22 @@ fresh sealed capture (state6d) reached a shell in **3 s**. After unseal,
 `ToSql` error, so the anchor step saw an empty tip list. Fixed in source at
 `2243ee7` (cast to `i32`, log every sidechain error) and proven against a real
 PostgreSQL 16 container; the seventh image is the remaining end-to-end proof.
+
+**Outbox producer.** The same writer now appends to `game_outbox`:
+
+- a state save → `game.state.<pid>` with revision, hash, day, quests, tokens,
+  shard, shard height and anchor height;
+- a place/break → `game.edit` with position, block and player.
+
+Rows start `status='queued'`; no courier drains them yet. Measured on
+PostgreSQL 16 with two `status` turns for `outbox-p1`:
+
+```
+seq 1  game.state.outbox-p1  rev 1  shard_h 1  anchor_h 1
+seq 2  game.state.outbox-p1  rev 2  shard_h 2  anchor_h 2
+game_side_blocks: (shard 1, height 1, edits 1), (shard 1, height 2, edits 2)
+game_anchors:     height 1 (parent empty), height 2 (parent = anchor 1 hash)
+```
 
 **D62 — capture Vault sealed.** An unsealed Vault in a warm snapshot restores to
 an empty console. A state captured with Vault stopped or sealed returns a shell

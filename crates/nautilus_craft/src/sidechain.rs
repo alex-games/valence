@@ -88,7 +88,6 @@ impl SidechainHandle {
             day,
         });
     }
-
 }
 
 fn init(client: &mut Client) -> Result<(), postgres::Error> {
@@ -164,6 +163,17 @@ fn writer(rx: Receiver<Job>, url: String) {
                            updated_by=EXCLUDED.updated_by, updated_at=now()",
                         &[&WORLD, &x, &y, &z, &block, &by],
                     );
+                    if result.is_ok() {
+                        let payload = json!({
+                            "x": x, "y": y, "z": z, "block": block, "by": by
+                        });
+                        if let Err(e) = db.execute(
+                            "INSERT INTO game_outbox(topic,payload,created_at) VALUES($1,$2,$3)",
+                            &[&"game.edit", &payload, &now()],
+                        ) {
+                            eprintln!("[sidechain] edit outbox insert: {e}");
+                        }
+                    }
                     result.is_err()
                 },
                 Job::State {
@@ -217,7 +227,7 @@ fn writer(rx: Receiver<Job>, url: String) {
                     // `edits` is `int`; passing an i64 here is a ToSql type
                     // error that the old code discarded, which is why the
                     // account row appeared and the shard row silently did not
-                    // (D63).
+                    // (D77).
                     if let Err(e) = db.execute(
                         "INSERT INTO game_side_blocks(world,shard,height,hash,parent,root,edits,at)
                          VALUES($1,$2,$3,$4,$5,$6,$7,$8)
@@ -250,6 +260,7 @@ fn writer(rx: Receiver<Job>, url: String) {
                             Vec::new()
                         }
                     };
+                    let mut anchor_height: Option<i64> = None;
                     if !tips.is_empty() {
                         let roots: Vec<serde_json::Value> = tips
                             .iter()
@@ -288,7 +299,25 @@ fn writer(rx: Receiver<Job>, url: String) {
                             ],
                         ) {
                             eprintln!("[sidechain] anchor insert: {e}");
+                        } else {
+                            anchor_height = Some(a_height);
                         }
+                    }
+
+                    // Durable outbox: the state save is the event a relay or the
+                    // CC must deliver. Writing it beside the sidechain rows means
+                    // a broker outage delays it, never loses it.
+                    let outbox = json!({
+                        "pid": pid, "revision": revision, "hash": hash, "day": day,
+                        "quests": quests, "tokens": tokens,
+                        "shard": shard, "shard_height": height,
+                        "anchor_height": anchor_height
+                    });
+                    if let Err(e) = db.execute(
+                        "INSERT INTO game_outbox(topic,payload,created_at) VALUES($1,$2,$3)",
+                        &[&format!("game.state.{pid}"), &outbox, &at],
+                    ) {
+                        eprintln!("[sidechain] state outbox insert: {e}");
                     }
                     false
                 }
