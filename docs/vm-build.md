@@ -71,7 +71,7 @@ present.
 | S47 init validation | 2026-11-07 | 11,864 s | exit 0, 226 MB, 12,540 blobs |
 | S47 human-output recovery + sidechain | 2026-11-08 | 12,473 s | exit 0, 226 MB, 12,540 blobs |
 | accounts/shards/anchors producer | 2026-11-08 | 12,227 s | exit 0, 226 MB, six-state sidechain |
-| D77 `edits int4` + outbox payload | 2026-11-08 | running | seventh image, started 20:40 |
+| D77 `edits int4` + outbox payload | 2026-11-08 | 12,279 s | exit 0, 226 MB; sealed restore PASS, 1 shard / 1 anchor / 1 outbox row |
 | scoped Vault token | 2026-11-08 | pending | eighth image payload |
 | cold boot (sidechain build) | 2026-11-08 | — | Vault **unsealed**, KV enabled, PostgreSQL tables created |
 
@@ -110,7 +110,25 @@ fresh sealed capture (state6d) reached a shell in **3 s**. After unseal,
 `game_side_blocks.edits` is `int4`, the writer passed `i64` and discarded the
 `ToSql` error, so the anchor step saw an empty tip list. Fixed in source at
 `2243ee7` (cast to `i32`, log every sidechain error) and proven against a real
-PostgreSQL 16 container; the seventh image is the remaining end-to-end proof.
+PostgreSQL 16 container.
+
+**Seventh image status: validated 2026-11-09.** Build `12,279 s`, exit 0,
+226 MB, binary 16 MB i686 static with the D77 cast and the outbox producer. A
+sealed capture (`state7clean`, 869,969,460 bytes raw / 42 MB zst,
+sha256 `6ce31794…c00a61`) restored a shell in **0 s** and the proof printed
+`restore-proof: PASS` for every check:
+
+```
+Sealed false (Vault 1.17.0-beta1)
+POST /api/assistant restore-p1 → "intent":"status"
+vault secret/data/nautilus/game/index → {"players":["restore-p1"],"revision":1}
+vault secret/data/nautilus/players/restore-p1/state → version 1
+game_state_index → restore-p1 | revision 1 | 5c972e004b5817d3
+game_accounts    → restore-p1
+game_side_blocks → 1 (shard row written)
+game_anchors     → 1
+game_outbox      → 1 queued game.state.restore-p1
+```
 
 **Outbox producer.** The same writer now appends to `game_outbox`:
 
@@ -151,6 +169,15 @@ in 3 s. `vm/validate.sh` defaults `WA_GAME_SEAL_VAULT=1`; after restore run
 Verified with state8: shell 3 s, unseal `Sealed false`, POST `/api/assistant`
 created `restore-p1`, Vault index `{"players":["restore-p1"],"revision":1}`,
 player state version 1, and `game_state_index` revision 1.
+
+**D62 follow-up — sealing is necessary, not sufficient.** On the seventh image
+`vault operator seal` printed `Success! Vault is sealed.` and then the shell did
+not return; the old capture ran `vault status` in the same command and saved
+with that probe still in front of the prompt. Restoring that state echoes every
+command and executes none. The harness now Ctrl-Cs after the seal, waits for
+`__WA_SEAL_QUIET__`, probes status separately, and Ctrl-Cs again before the
+save. `state7clean` was captured this way and restores a shell in **0 s**; the
+proof is above.
 
 ## 4. What the image now persists
 
