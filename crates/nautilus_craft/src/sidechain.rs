@@ -214,7 +214,11 @@ fn writer(rx: Receiver<Job>, url: String) {
                         .map(|row| (row.get(0), row.get(1)));
                     let height = prev.as_ref().map(|(h, _)| h + 1).unwrap_or(1);
                     let parent = prev.map(|(_, h)| h).unwrap_or_default();
-                    let _ = db.execute(
+                    // `edits` is `int`; passing an i64 here is a ToSql type
+                    // error that the old code discarded, which is why the
+                    // account row appeared and the shard row silently did not
+                    // (D63).
+                    if let Err(e) = db.execute(
                         "INSERT INTO game_side_blocks(world,shard,height,hash,parent,root,edits,at)
                          VALUES($1,$2,$3,$4,$5,$6,$7,$8)
                          ON CONFLICT(world,shard,height) DO NOTHING",
@@ -225,21 +229,27 @@ fn writer(rx: Receiver<Job>, url: String) {
                             &hash,
                             &parent,
                             &hash,
-                            &(revision as i64),
+                            &(revision as i32),
                             &at,
                         ],
-                    );
+                    ) {
+                        eprintln!("[sidechain] side block insert: {e}");
+                    }
 
-                    let tips = db
-                        .query(
-                            "SELECT shard,height,hash,root FROM game_side_blocks s
-                             WHERE world=$1 AND height = (
-                               SELECT max(height) FROM game_side_blocks t
-                               WHERE t.world=s.world AND t.shard=s.shard
-                             ) ORDER BY shard",
-                            &[&WORLD],
-                        )
-                        .unwrap_or_default();
+                    let tips = match db.query(
+                        "SELECT shard,height,hash,root FROM game_side_blocks s
+                         WHERE world=$1 AND height = (
+                           SELECT max(height) FROM game_side_blocks t
+                           WHERE t.world=s.world AND t.shard=s.shard
+                         ) ORDER BY shard",
+                        &[&WORLD],
+                    ) {
+                        Ok(rows) => rows,
+                        Err(e) => {
+                            eprintln!("[sidechain] side tips query: {e}");
+                            Vec::new()
+                        }
+                    };
                     if !tips.is_empty() {
                         let roots: Vec<serde_json::Value> = tips
                             .iter()
@@ -265,7 +275,7 @@ fn writer(rx: Receiver<Job>, url: String) {
                         let a_height = last.as_ref().map(|(h, _)| h + 1).unwrap_or(1);
                         let a_parent = last.map(|(_, h)| h).unwrap_or_default();
                         let a_hash = anchor_hash(a_height, &a_parent, &roots_json, at);
-                        let _ = db.execute(
+                        if let Err(e) = db.execute(
                             "INSERT INTO game_anchors(world,height,hash,parent,roots,at)
                              VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(world,height) DO NOTHING",
                             &[
@@ -276,7 +286,9 @@ fn writer(rx: Receiver<Job>, url: String) {
                                 &serde_json::Value::Array(roots),
                                 &at,
                             ],
-                        );
+                        ) {
+                            eprintln!("[sidechain] anchor insert: {e}");
+                        }
                     }
                     false
                 }
