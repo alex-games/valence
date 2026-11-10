@@ -299,6 +299,18 @@ impl PlayerState {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Escrow {
+    pub id: String,
+    pub from: String,
+    pub to: String,
+    pub amount: i64,
+    pub status: String,
+    pub created_at: i64,
+    #[serde(default)]
+    pub updated_at: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct Persisted {
     version: u32,
@@ -308,6 +320,10 @@ struct Persisted {
     revision: u64,
     players: BTreeMap<String, PlayerState>,
     audit: Vec<AuditRow>,
+    /// Two-phase reservations. Funds are debited on `open`, refunded on
+    /// `cancel`, or credited to the receiver on `commit`.
+    #[serde(default)]
+    escrow: BTreeMap<String, Escrow>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -369,6 +385,7 @@ fn load_players_from_vault(vault: &VaultStateStore) -> Option<Persisted> {
         revision: index.get("revision").and_then(|v| v.as_u64()).unwrap_or(0),
         players,
         audit,
+        escrow: BTreeMap::new(),
     })
 }
 
@@ -431,6 +448,7 @@ impl Assistant {
             revision: 0,
             players: BTreeMap::new(),
             audit: Vec::new(),
+            escrow: BTreeMap::new(),
         };
         if let Some(path) = &state_path {
             if let Ok(raw) = std::fs::read_to_string(path) {
@@ -454,6 +472,87 @@ impl Assistant {
 
     pub fn paused(&self) -> bool {
         self.paused
+    }
+
+    /// Phase 1 of a credit transfer: debit the sender and record a `held`
+    /// reservation. The receiver is not credited until `escrow_commit`.
+    pub fn escrow_open(&mut self, from: &str, to: &str, amount: i64) -> Result<Escrow, String> {
+        let from = from.trim();
+        let to = to.trim();
+        if from.is_empty() || to.is_empty() {
+            return Err("from and to are required".into());
+        }
+        if from == to {
+            return Err("from and to must differ".into());
+        }
+        if amount <= 0 {
+            return Err("amount must be positive".into());
+        }
+        {
+            let sender = self.ensure_player(from);
+            if sender.credits < amount {
+                return Err(format!(
+                    "insufficient credits: {} < {amount}",
+                    sender.credits
+                ));
+            }
+            sender.credits -= amount;
+        }
+        let id = format!("esc-{}-{}", now(), self.data.escrow.len() + 1);
+        let escrow = Escrow {
+            id: id.clone(),
+            from: from.to_owned(),
+            to: to.to_owned(),
+            amount,
+            status: "held".into(),
+            created_at: now(),
+            updated_at: now(),
+        };
+        self.data.escrow.insert(id, escrow.clone());
+        self.save();
+        Ok(escrow)
+    }
+
+    /// Phase 2 commit: credit the receiver and close the reservation.
+    pub fn escrow_commit(&mut self, id: &str) -> Result<Escrow, String> {
+        let escrow = self
+            .data
+            .escrow
+            .get(id)
+            .cloned()
+            .ok_or_else(|| "unknown escrow".to_string())?;
+        if escrow.status != "held" {
+            return Err(format!("escrow is {}", escrow.status));
+        }
+        let receiver = self.ensure_player(&escrow.to);
+        receiver.credits = receiver.credits.saturating_add(escrow.amount);
+        let mut updated = escrow;
+        updated.status = "committed".into();
+        updated.updated_at = now();
+        self.data.escrow.insert(id.to_owned(), updated.clone());
+        self.save();
+        Ok(updated)
+    }
+
+    /// Phase 2 abort: return the held credits to the sender.
+    pub fn escrow_cancel(&mut self, id: &str) -> Result<Escrow, String> {
+        let escrow = self
+            .data
+            .escrow
+            .get(id)
+            .cloned()
+            .ok_or_else(|| "unknown escrow".to_string())?;
+        if escrow.status != "held" {
+            return Err(format!("escrow is {}", escrow.status));
+        }
+        let sender = self.ensure_player(&escrow.from);
+        sender.credits = sender.credits.saturating_add(escrow.amount);
+        let mut updated = escrow;
+        updated.status = "cancelled".into();
+        updated.updated_at = now();
+        self.data.escrow.insert(id.to_owned(), updated.clone());
+        self.save();
+        Ok(updated)
     }
 
     pub fn ensure_player(&mut self, name: &str) -> &mut PlayerState {
@@ -2221,6 +2320,38 @@ mod tests {
 
     fn level() -> Level {
         Level::load()
+    }
+
+    #[test]
+    fn escrow_holds_commits_and_cancels() {
+        let mut ai = Assistant::in_memory(level());
+        let from_start = ai.ensure_player("alice").credits;
+        let to_start = ai.ensure_player("bob").credits;
+
+        let held = ai.escrow_open("alice", "bob", 120).expect("open");
+        assert_eq!(held.status, "held");
+        assert_eq!(ai.ensure_player("alice").credits, from_start - 120);
+        assert_eq!(ai.ensure_player("bob").credits, to_start);
+
+        let committed = ai.escrow_commit(&held.id).expect("commit");
+        assert_eq!(committed.status, "committed");
+        assert_eq!(ai.ensure_player("bob").credits, to_start + 120);
+        assert!(ai.escrow_commit(&held.id).is_err());
+
+        let refund = ai.escrow_open("alice", "bob", 30).expect("open refund");
+        let cancelled = ai.escrow_cancel(&refund.id).expect("cancel");
+        assert_eq!(cancelled.status, "cancelled");
+        assert_eq!(ai.ensure_player("alice").credits, from_start - 120);
+        assert!(ai.escrow_cancel(&refund.id).is_err());
+    }
+
+    #[test]
+    fn escrow_refuses_overdraw_self_transfer_and_zero() {
+        let mut ai = Assistant::in_memory(level());
+        assert!(ai.escrow_open("alice", "alice", 1).is_err());
+        assert!(ai.escrow_open("alice", "bob", 0).is_err());
+        assert!(ai.escrow_open("alice", "bob", 1_000_000).is_err());
+        assert!(ai.data.escrow.is_empty());
     }
 
     #[test]

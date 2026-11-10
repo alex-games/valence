@@ -298,6 +298,52 @@ fn handle(mut stream: TcpStream, ai: Arc<Mutex<Assistant>>, level: Level) {
                 }
             }
         }
+        ("POST", "/api/escrow/open") => {
+            let text = String::from_utf8_lossy(&body);
+            let value: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+            let from = value.get("from").and_then(|v| v.as_str()).unwrap_or("");
+            let to = value.get("to").and_then(|v| v.as_str()).unwrap_or("");
+            let amount = value.get("amount").and_then(|v| v.as_i64()).unwrap_or(0);
+            let result = ai
+                .lock()
+                .expect("assistant mutex")
+                .escrow_open(from, to, amount);
+            let (status, payload) = match result {
+                Ok(escrow) => ("200 OK", json!({ "escrow": escrow }).to_string()),
+                Err(error) => ("400 Bad Request", json!({ "error": error }).to_string()),
+            };
+            write_response(
+                &mut stream,
+                status,
+                "application/json",
+                payload.as_bytes(),
+                cors,
+                head_only,
+            );
+        }
+        ("POST", "/api/escrow/commit") | ("POST", "/api/escrow/cancel") => {
+            let text = String::from_utf8_lossy(&body);
+            let value: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+            let id = value.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            let mut assistant = ai.lock().expect("assistant mutex");
+            let result = if path.ends_with("commit") {
+                assistant.escrow_commit(id)
+            } else {
+                assistant.escrow_cancel(id)
+            };
+            let (status, payload) = match result {
+                Ok(escrow) => ("200 OK", json!({ "escrow": escrow }).to_string()),
+                Err(error) => ("400 Bad Request", json!({ "error": error }).to_string()),
+            };
+            write_response(
+                &mut stream,
+                status,
+                "application/json",
+                payload.as_bytes(),
+                cors,
+                head_only,
+            );
+        }
         ("POST", "/api/assistant") => {
             let text = String::from_utf8_lossy(&body);
             let value: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
