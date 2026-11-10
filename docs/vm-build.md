@@ -73,6 +73,7 @@ present.
 | accounts/shards/anchors producer | 2026-11-08 | 12,227 s | exit 0, 226 MB, six-state sidechain |
 | D77 `edits int4` + outbox payload | 2026-11-08 | 12,279 s | exit 0, 226 MB; sealed restore PASS, 1 shard / 1 anchor / 1 outbox row |
 | scoped Vault token | 2026-11-09 | 12,551 s | exit 0, 226 MB; sealed restore 10/10 PASS, game-token denied policy list |
+| outbox pull/ack API | 2026-11-09 | 12,574 s | exit 0, 226 MB; sealed restore 14/14 PASS, outbox list/ack/empty |
 | cold boot (sidechain build) | 2026-11-08 | — | Vault **unsealed**, KV enabled, PostgreSQL tables created |
 
 The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
@@ -150,6 +151,20 @@ game_outbox → 1 queued game.state.restore-p1
 
 The game server therefore runs with the scoped token, not the root token, on
 the built image.
+
+**Ninth image status: validated 2026-11-09.** Build `12,574 s`, exit 0,
+226 MB. Cold capture `state9` (869,368,044 bytes raw / 42 MB zst,
+sha256 `01d0f5bd…f6fafa`); restore shell **0 s**, `restore-proof: PASS` for all
+fourteen checks. The new ones:
+
+```
+GET  /api/outbox        → seq 1, game.state.restore-p1
+POST /api/outbox/ack    → {"acked":1}
+GET  /api/outbox        → {"rows":[]}
+```
+
+The existing s47/unseal/scoped-token, state/account and shard/anchor/outbox rows
+all passed on the same run.
 
 **Outbox producer.** The same writer now appends to `game_outbox`:
 
