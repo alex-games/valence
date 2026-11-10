@@ -87,7 +87,7 @@ present.
 | D77 `edits int4` + outbox payload | 2026-11-08 | 12,279 s | exit 0, 226 MB; sealed restore PASS, 1 shard / 1 anchor / 1 outbox row |
 | scoped Vault token | 2026-11-09 | 12,551 s | exit 0, 226 MB; sealed restore 10/10 PASS, game-token denied policy list |
 | outbox pull/ack API | 2026-11-09 | 12,574 s | exit 0, 226 MB; sealed restore 14/14 PASS, outbox list/ack/empty |
-| outbox replay API | 2026-11-09 | running | tenth image payload |
+| outbox replay API | 2026-11-10 | 12,452 s | exit 0, 226 MB; sealed restore 17/17 PASS, replay cycle |
 | cold boot (sidechain build) | 2026-11-08 | — | Vault **unsealed**, KV enabled, PostgreSQL tables created |
 
 The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
@@ -179,6 +179,20 @@ GET  /api/outbox        → {"rows":[]}
 
 The existing s47/unseal/scoped-token, state/account and shard/anchor/outbox rows
 all passed on the same run.
+
+**Tenth image status: validated 2026-11-10.** Build `12,452 s`, exit 0,
+226 MB. Cold capture `state10` (867,406,216 bytes raw / 41 MB zst,
+sha256 `1ef0c79a…df8b`); restore shell **0 s**, **17/17 PASS**, including the
+replay cycle:
+
+```
+GET  /api/outbox        → seq 1 queued
+POST /api/outbox/ack    → {"acked":1}
+POST /api/outbox/replay → {"replayed":1}
+GET  /api/outbox        → seq 1 queued again
+POST /api/outbox/ack    → {"acked":1}
+GET  /api/outbox        → {"rows":[]}
+```
 
 **Outbox producer.** The same writer now appends to `game_outbox`:
 
