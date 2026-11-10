@@ -1,0 +1,335 @@
+#!/bin/sh
+#
+# Vault holds the **user game state** for every player, plus the per-player
+# Bitcoin testnet wallet.
+#
+# **PostgreSQL is the only persistence store.** Vault uses the `vault_data`
+# database for its encrypted data, and `vault_bootstrap` in the `postgres`
+# database for the unseal key, root token and scoped game token. Both are in
+# /var/lib/pgsql and therefore in the warm-boot snapshot.
+#
+# **Boot order.** This script is S50vault, after Buildroot's S50postgresql.
+# It waits for pg_isready, creates `vault_user`/`vault_data` on first boot, then
+# starts/unseals Vault. Cold capture stops the daemon; warm boot starts it in
+# the background and returns.
+#
+DAEMON=/usr/bin/vault
+PID=/var/run/vault.pid
+LOG=/var/log/vault.log
+CONFIG=/etc/vault/vault.hcl
+STATE=/var/lib/vault
+LOG=/var/log/vault.log
+CONFIG=/etc/vault/vault.hcl
+POLICY_FILE=/etc/vault/nautilus-game.hcl
+DB=postgres
+export VAULT_ADDR=http://127.0.0.1:8200
+
+wait_pg() {
+    i=0
+    while [ "$i" -lt 60 ]; do
+        /usr/bin/pg_isready -q 2>/dev/null && return 0
+        i=$((i + 1))
+        sleep 1
+    done
+    return 1
+}
+
+db_sql() {
+    /bin/su -s /bin/sh postgres -c "/usr/bin/psql -d $DB -tAc \"$1\"" 2>/dev/null
+}
+
+db_get() {
+    db_sql "SELECT value FROM vault_bootstrap WHERE role='$1'" | /usr/bin/head -1
+}
+
+db_put() {
+    /bin/su -s /bin/sh postgres -c \
+        "/usr/bin/psql -d $DB -c \"INSERT INTO vault_bootstrap(role,value) VALUES('$1','$2') ON CONFLICT(role) DO UPDATE SET value=EXCLUDED.value, updated_at=now()\"" \
+        >/dev/null 2>&1
+}
+
+db_init() {
+    /bin/su -s /bin/sh postgres -c \
+        "/usr/bin/psql -d $DB -c 'CREATE TABLE IF NOT EXISTS vault_bootstrap(role text PRIMARY KEY, value text NOT NULL, updated_at timestamptz NOT NULL DEFAULT now())'" \
+        >/dev/null 2>&1
+    # Vault's PostgreSQL storage backend needs its own role and database.
+    role=$(db_sql "SELECT 1 FROM pg_roles WHERE rolname='vault_user'")
+    if [ "$role" != "1" ]; then
+        /bin/su -s /bin/sh postgres -c \
+            "/usr/bin/psql -d $DB -c \"CREATE ROLE vault_user LOGIN PASSWORD 'vault'\"" \
+            >/dev/null 2>&1
+    fi
+    vaultdb=$(db_sql "SELECT 1 FROM pg_database WHERE datname='vault_data'")
+    if [ "$vaultdb" != "1" ]; then
+        /bin/su -s /bin/sh postgres -c \
+            "/usr/bin/psql -d $DB -c 'CREATE DATABASE vault_data OWNER vault_user'" \
+            >/dev/null 2>&1
+    fi
+    # Vault's PostgreSQL backend does not create its own table; it exits if the
+    # table is missing. Create it as postgres, then hand it to vault_user.
+    /bin/su -s /bin/sh postgres -c \
+        "/usr/bin/psql -d vault_data -c 'CREATE TABLE IF NOT EXISTS vault_kv_store (parent_path TEXT NOT NULL, path TEXT, key TEXT, value BYTEA, CONSTRAINT pkey PRIMARY KEY (path, key)); ALTER TABLE vault_kv_store OWNER TO vault_user; CREATE INDEX IF NOT EXISTS parent_path_idx ON vault_kv_store (parent_path);'" \
+        >/dev/null 2>&1
+}
+
+# Normalize either the JSON form or Vault's human `operator init` output.
+normalize_init() {
+    f="${1:-$STATE/init.json}"
+    python3 - "$f" <<'PY'
+import json, re, sys
+raw = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+try:
+    data = json.loads(raw)
+    print(json.dumps({
+        "root_token": data["root_token"],
+        "unseal_keys_b64": [data["unseal_keys_b64"][0]],
+    }))
+    raise SystemExit(0)
+except Exception:
+    pass
+unseal = re.search(r"Unseal Key 1:\s*(\S+)", raw)
+token = re.search(r"Initial Root Token:\s*(\S+)", raw)
+if not unseal or not token:
+    raise SystemExit(1)
+print(json.dumps({
+    "root_token": token.group(1),
+    "unseal_keys_b64": [unseal.group(1)],
+}))
+PY
+}
+
+init_valid() {
+    f="${1:-$STATE/init.json}"
+    [ -s "$f" ] || return 1
+    python3 - "$f" <<'PY' >/dev/null 2>&1
+import json, sys
+data = json.load(open(sys.argv[1]))
+assert data["root_token"]
+assert data["unseal_keys_b64"][0]
+PY
+}
+
+# Migrate the old /var/lib/vault files into PostgreSQL once, then remove the
+# directory. After this runs, Vault persists only in PostgreSQL.
+migrate_legacy() {
+    old_init="$STATE/init.json"
+    tmp=/tmp/wa-init.migrated
+    if [ -s "$old_init" ] && [ -z "$(db_get root_token)" ]; then
+        if init_valid "$old_init" || normalize_init "$old_init" >"$tmp" 2>/dev/null; then
+            src="$old_init"
+            [ -s "$tmp" ] && src="$tmp"
+            token=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["root_token"])' "$src" 2>/dev/null)
+            unseal=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["unseal_keys_b64"][0])' "$src" 2>/dev/null)
+            if [ -n "$token" ] && [ -n "$unseal" ]; then
+                db_put unseal_key_b64 "$unseal"
+                db_put root_token "$token"
+                echo "migrated the Vault bootstrap from /var/lib/vault/init.json"
+            fi
+        fi
+        rm -f "$tmp"
+    fi
+    if [ -s "$STATE/game-token" ] && [ -z "$(db_get game_token)" ]; then
+        db_put game_token "$(cat "$STATE/game-token")"
+    fi
+    # No file persistence, including the old file backend's data.
+    rm -rf "$STATE"
+}
+
+# The game server gets a scoped token, never the root token.
+ensure_game_token() {
+    root_token="$1"
+    mkdir -p /etc/vault
+    cat > "$POLICY_FILE" <<'HCL'
+path "secret/data/nautilus/*" {
+  capabilities = ["create", "read", "update", "delete", "list"]
+}
+path "secret/metadata/nautilus/*" {
+  capabilities = ["read", "list", "delete"]
+}
+HCL
+    VAULT_TOKEN="$root_token" "$DAEMON" policy write nautilus-game "$POLICY_FILE" \
+        >>"$LOG" 2>&1 || return 1
+
+    game=$(db_get game_token)
+    if [ -n "$game" ] && VAULT_TOKEN="$game" "$DAEMON" token lookup \
+        >/dev/null 2>&1; then
+        return 0
+    fi
+
+    tmp=/tmp/wa-game-token.tmp
+    VAULT_TOKEN="$root_token" "$DAEMON" token create \
+        -policy=nautilus-game -orphan -ttl=0 \
+        -display-name=nautilus-game -format=json >"$tmp" 2>>"$LOG" || {
+        rm -f "$tmp"
+        return 1
+    }
+    t=$(python3 - "$tmp" <<'PY'
+import json, re, sys
+raw = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+try:
+    print(json.loads(raw)["auth"]["client_token"])
+except Exception:
+    m = re.search(r"(?m)^token\s+(\S+)$", raw)
+    if not m:
+        raise SystemExit(1)
+    print(m.group(1))
+PY
+) || {
+        rm -f "$tmp"
+        return 1
+    }
+    db_put game_token "$t"
+    rm -f "$tmp"
+    return 0
+}
+
+start_vault() {
+    mkdir -p /var/log
+    if ! wait_pg; then
+        echo "FAIL (PostgreSQL is not ready)"
+        return 1
+    fi
+    db_init
+    migrate_legacy
+
+    start-stop-daemon -S -q -b -m -p "$PID" -x "$DAEMON" -- \
+        server -config="$CONFIG" >>"$LOG" 2>&1
+
+    i=0
+    while [ "$i" -lt 30 ]; do
+        if "$DAEMON" status 2>&1 | /bin/grep -q "Initialized"; then break; fi
+        i=$((i + 1))
+        sleep 1
+    done
+
+    # A pre-PostgreSQL image has bootstrap keys but no Vault rows in PG. The
+    # file data cannot be imported; start a fresh PostgreSQL store and replace
+    # the bootstrap, or unseal would fail on an uninitialised Vault.
+    if ! "$DAEMON" status 2>&1 | /bin/grep -q "Initialized.*true"; then
+        if [ -n "$(db_get root_token)" ]; then
+            echo "PostgreSQL Vault storage is empty; re-initialising (file data is not migrated)"
+            db_put root_token ""
+            db_put unseal_key_b64 ""
+        fi
+    fi
+
+    token=$(db_get root_token)
+    unseal=$(db_get unseal_key_b64)
+    if [ -z "$token" ] || [ -z "$unseal" ]; then
+        # No bootstrap and no recoverable key. The PostgreSQL storage is empty
+        # on a fresh image, so initialise a new Vault.
+        tmp=/tmp/wa-init.tmp
+        "$DAEMON" operator init -key-shares=1 -key-threshold=1 -format=json \
+            >"$tmp" 2>>"$LOG" || {
+            rm -f "$tmp"
+            echo "FAIL (init; see $LOG)"
+            return 1
+        }
+        if ! init_valid "$tmp"; then
+            if normalize_init "$tmp" >"$tmp.norm" 2>/dev/null && init_valid "$tmp.norm"; then
+                mv "$tmp.norm" "$tmp"
+            else
+                rm -f "$tmp" "$tmp.norm"
+                echo "FAIL (init output is not JSON or operator-init text; see $LOG)"
+                return 1
+            fi
+        fi
+        token=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["root_token"])' "$tmp" 2>/dev/null)
+        unseal=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["unseal_keys_b64"][0])' "$tmp" 2>/dev/null)
+        rm -f "$tmp"
+        if [ -z "$token" ] || [ -z "$unseal" ]; then
+            echo "FAIL (init output unreadable)"
+            return 1
+        fi
+        db_put unseal_key_b64 "$unseal"
+        db_put root_token "$token"
+    fi
+
+    "$DAEMON" operator unseal "$unseal" >>"$LOG" 2>&1 || {
+        echo "FAIL (unseal; see $LOG)"
+        return 1
+    }
+
+    VAULT_TOKEN="$token" "$DAEMON" secrets enable -path=secret kv-v2 \
+        >>"$LOG" 2>&1 || true
+    if ! ensure_game_token "$token"; then
+        echo "FAIL (scoped game token; see $LOG)"
+        return 1
+    fi
+    if "$DAEMON" status 2>&1 | /bin/grep -q "Sealed.*true"; then
+        echo "FAIL (still sealed; see $LOG)"
+        return 1
+    fi
+    echo "OK (bootstrap in PostgreSQL; user state at secret/nautilus/game)"
+    return 0
+}
+
+case "$1" in
+  start)
+    printf "Starting vault: "
+    start_vault
+    ;;
+  stop)
+    printf "Stopping vault: "
+    start-stop-daemon -K -q -p "$PID" 2>/dev/null || true
+    echo "OK"
+    ;;
+  restart)
+    "$0" stop
+    sleep 1
+    "$0" start
+    ;;
+  warmboot)
+    # Warm restore: make sure PostgreSQL and the bootstrap are available, then
+    # start Vault in the background. The caller polls `vault status`.
+    printf "Warming vault: "
+    if ! wait_pg; then echo "FAIL (PostgreSQL is not ready)"; exit 1; fi
+    db_init
+    migrate_legacy
+    if [ -z "$(db_get root_token)" ]; then
+        echo "FAIL (no Vault bootstrap in PostgreSQL)"
+        exit 1
+    fi
+    ( start_vault >/tmp/vault-warmboot.log 2>&1 ) &
+    echo "started in background"
+    ;;
+  coldboot)
+    # Cold capture: the bootstrap must be in PostgreSQL and the daemon gone.
+    printf "Cold-booting vault: "
+    if ! wait_pg; then echo "FAIL (PostgreSQL is not ready)"; exit 1; fi
+    db_init
+    migrate_legacy
+    if [ -z "$(db_get root_token)" ]; then
+        echo "FAIL (no Vault bootstrap in PostgreSQL)"
+        exit 1
+    fi
+    start-stop-daemon -K -q -p "$PID" 2>/dev/null || true
+    i=0
+    while [ "$i" -lt 20 ]; do
+        /bin/ps -ef | /bin/grep -q '[v]ault server' || break
+        i=$((i + 1))
+        sleep 1
+    done
+    if /bin/ps -ef | /bin/grep -q '[v]ault server'; then
+        echo "FAIL (Vault still running)"
+        exit 1
+    fi
+    echo "OK (bootstrap in PostgreSQL; daemon stopped for capture)"
+    ;;
+  unseal)
+    "$0" warmboot
+    ;;
+  root-token)
+    db_get root_token
+    ;;
+  game-token)
+    db_get game_token
+    ;;
+  status)
+    "$DAEMON" status
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status|unseal|warmboot|coldboot|root-token|game-token}"
+    exit 1
+    ;;
+esac

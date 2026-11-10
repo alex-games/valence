@@ -16,14 +16,9 @@ case "$1" in
   start)
     printf "Starting nautilus-craft: "
     mkdir -p /var/lib/nautilus /var/log
-    # The file-backend Vault token is written by S47vault. The game server gets
-    # the scoped token, never the root token; the token itself is never echoed,
-    # only the environment inherits it.
-    if [ -r /var/lib/vault/game-token ]; then
-        VAULT_TOKEN=$(cat /var/lib/vault/game-token)
-        export VAULT_TOKEN
-    elif [ -r /var/lib/vault/root-token ]; then
-        VAULT_TOKEN=$(cat /var/lib/vault/root-token)
+    # The scoped token is read from PostgreSQL; no token file is persisted.
+    VAULT_TOKEN=$(/etc/init.d/S50vault game-token 2>/dev/null)
+    if [ -n "$VAULT_TOKEN" ]; then
         export VAULT_TOKEN
     fi
     NAUTILUS_WEB_ADDR=127.0.0.1:8081 \
