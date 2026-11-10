@@ -74,6 +74,7 @@ present.
 | D77 `edits int4` + outbox payload | 2026-11-08 | 12,279 s | exit 0, 226 MB; sealed restore PASS, 1 shard / 1 anchor / 1 outbox row |
 | scoped Vault token | 2026-11-09 | 12,551 s | exit 0, 226 MB; sealed restore 10/10 PASS, game-token denied policy list |
 | outbox pull/ack API | 2026-11-09 | 12,574 s | exit 0, 226 MB; sealed restore 14/14 PASS, outbox list/ack/empty |
+| outbox replay API | 2026-11-09 | running | tenth image payload |
 | cold boot (sidechain build) | 2026-11-08 | — | Vault **unsealed**, KV enabled, PostgreSQL tables created |
 
 The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
