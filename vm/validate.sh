@@ -42,9 +42,12 @@ HARNESS="$ROOT/../../age-of-intellect/tools/vmrelay-harness"
 [ -d "$HARNESS" ] || HARNESS="$ROOT/../../../tools/vmrelay-harness"
 cd "$HARNESS"
 export WA_RELAY_PORT="${RELAY_PORT:-8891}"
-# The game snapshot is captured with Vault sealed. A restored unsealed Vault
-# leaves the console dead (D62); the host calls S47vault unseal after restore.
-export WA_GAME_SEAL_VAULT="${WA_GAME_SEAL_VAULT:-1}"
+# **Vault is stopped for the cold capture, started on the warm boot.** A live
+# Vault process (sealed or not) in the snapshot is the D62/D78 failure shape;
+# the data stays in /var/lib/vault, and the restore proof starts S47vault in the
+# background before reading state.
+export WA_GAME_STOP_VAULT="${WA_GAME_STOP_VAULT:-1}"
+export WA_GAME_SEAL_VAULT="${WA_GAME_SEAL_VAULT:-0}"
 ./run-snapshot.sh "$OUT" \
     "http://127.0.0.1:$PORT/vm/index.html?boot=true&console=1&memory=${MEMORY}"
 

@@ -88,7 +88,8 @@ present.
 | scoped Vault token | 2026-11-09 | 12,551 s | exit 0, 226 MB; sealed restore 10/10 PASS, game-token denied policy list |
 | outbox pull/ack API | 2026-11-09 | 12,574 s | exit 0, 226 MB; sealed restore 14/14 PASS, outbox list/ack/empty |
 | outbox replay API | 2026-11-10 | 12,452 s | exit 0, 226 MB; sealed restore 17/17 PASS, replay cycle |
-| local escrow API | 2026-11-10 | running | eleventh image; CMake 84% at ~5 h 53 m |
+| local escrow API | 2026-11-10 | stopped | superseded by build 12 (coldboot/warmboot) |
+| coldboot/warmboot Vault | 2026-11-10 | running | twelfth image payload |
 | cold boot (sidechain build) | 2026-11-08 | — | Vault **unsealed**, KV enabled, PostgreSQL tables created |
 
 The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
@@ -243,6 +244,20 @@ command and executes none. The harness now Ctrl-Cs after the seal, waits for
 `__WA_SEAL_QUIET__`, probes status separately, and Ctrl-Cs again before the
 save. `state7clean` was captured this way and restores a shell in **0 s**; the
 proof is above.
+
+**D81 — cold capture stops Vault; warm boot starts it in the background.** A
+live Vault process in the snapshot still needs the D78 quiet dance. S47 now has
+two explicit modes:
+
+```
+S47vault coldboot   # require init.json, stop the daemon, refuse if still running
+S47vault warmboot   # start in the background and return immediately
+```
+
+`vm/validate.sh` defaults `WA_GAME_STOP_VAULT=1`, `WA_GAME_SEAL_VAULT=0`; the
+capture refuses to save a live Vault. The restore proof runs `warmboot` and
+polls `vault status` until `Sealed false`, then checks the scoped token and API.
+The twelfth image is the first cold capture under this policy.
 
 ## 4. What the image now persists
 

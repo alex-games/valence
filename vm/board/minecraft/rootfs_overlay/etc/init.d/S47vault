@@ -262,11 +262,44 @@ case "$1" in
     fi
     echo "OK (sealed=false; scoped token)"
     ;;
+  warmboot)
+    # Warm restore: start Vault in the background and return immediately. The
+    # caller polls `vault status` for Sealed=false; the serial line must not
+    # block on Vault's startup.
+    printf "Warming vault: "
+    if [ ! -r "$INIT" ]; then
+        echo "FAIL (no $INIT)"
+        exit 1
+    fi
+    ( start_vault >/tmp/vault-warmboot.log 2>&1 ) &
+    echo "started in background"
+    ;;
+  coldboot)
+    # Cold capture: the data must already be initialised, and the daemon must be
+    # gone before the state save. A live Vault in the snapshot is D62/D78.
+    printf "Cold-booting vault: "
+    if [ ! -r "$INIT" ]; then
+        echo "FAIL (no $INIT; Vault was never initialised)"
+        exit 1
+    fi
+    start-stop-daemon -K -q -p "$PID" 2>/dev/null || true
+    i=0
+    while [ "$i" -lt 20 ]; do
+        /bin/ps -ef | /bin/grep -q '[v]ault server' || break
+        i=$((i + 1))
+        sleep 1
+    done
+    if /bin/ps -ef | /bin/grep -q '[v]ault server'; then
+        echo "FAIL (Vault still running)"
+        exit 1
+    fi
+    echo "OK (data initialised; daemon stopped for capture)"
+    ;;
   status)
     "$DAEMON" status
     ;;
   *)
-    echo "Usage: $0 {start|stop|restart|status|unseal}"
+    echo "Usage: $0 {start|stop|restart|status|unseal|warmboot|coldboot}"
     exit 1
     ;;
 esac
