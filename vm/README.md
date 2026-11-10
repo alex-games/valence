@@ -58,12 +58,12 @@ committing a second copy.
 | nginx | `:80`, `:8080` | `/` and `/embed/` → game; `/mqtt` → Mosquitto |
 | minecraft-server | `127.0.0.1:8081` | assets/manifest from PostgreSQL; MQTT bridge |
 | Mosquitto 2.x | `127.0.0.1:1883`, `9001` ws | MQTT v5; anonymous LAN demo |
-| Vault (file) | `127.0.0.1:8200` | **user game state + BTC wallets**; auto-init/unseal, root token `/var/lib/vault/root-token` |
-| PostgreSQL 18.6 | `127.0.0.1:5432` | `nautilus_craft` sidechain, user `craft` |
+| Vault (PostgreSQL) | `127.0.0.1:8200` | **user game state + BTC wallets**; storage in `vault_data`, bootstrap in `vault_bootstrap`, tokens under `/run/vault` |
+| PostgreSQL 18.6 | `127.0.0.1:5432` | `nautilus_craft` sidechain, `vault_data` Vault store, user `craft` |
 
-Init order: `S47vault` → `S48mosquitto` → `S49postgres-pgdata` →
-Buildroot `S50postgresql` (initdb/start) → `S51craft-db` (role/database) →
-`S52minecraft` → `S53nginx` → `S99banner`.
+Init order: `S46cleanup` → `S48mosquitto` → `S49postgres-pgdata` →
+Buildroot `S50postgresql` (initdb/start) → **`S50vault`** → `S51craft-db`
+(role/database) → `S52minecraft` → `S53nginx` → `S99banner`.
 
 ## Verify in the guest
 
@@ -80,16 +80,18 @@ su - postgres -c "psql -d nautilus_craft -c 'select player_id,name,address,quest
 su - postgres -c "psql -d nautilus_craft -c 'select shard,height,edits from game_side_blocks order by height desc limit 8'"
 su - postgres -c "psql -d nautilus_craft -c 'select height,hash from game_anchors order by height desc limit 4'"
 
-VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=$(cat /var/lib/vault/root-token) \
+VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=$(cat /run/vault/root-token) \
     vault kv get secret/nautilus/players/<pid>
-VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=$(cat /var/lib/vault/root-token) \
+VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=$(cat /run/vault/root-token) \
     vault kv get secret/nautilus/game/assistant
 ```
 
-`/var/lib/vault/data` and `/var/lib/pgsql` are both in the guest's persistent
-tree, so a warm-boot snapshot restores the user game state and the sidechain
-together. The old `nautilus-dev` token is gone; `S47vault` initialises the file
-backend once and re-unseals on later boots.
+`/var/lib/pgsql` carries both the sidechain and Vault's PostgreSQL data, so a
+warm-boot snapshot restores them together. The bootstrap keys and tokens are in
+`vault_bootstrap` (database `postgres`) and are materialised into `/run/vault`
+at boot; they are not persisted as files. `S50vault` waits for PostgreSQL,
+creates `vault_user`/`vault_data` on first boot, initialises Vault once and
+re-unseals on later boots.
 
 ## Play
 

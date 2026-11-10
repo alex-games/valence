@@ -1,16 +1,20 @@
 # Vault for the Minecraft VM.
 #
-# **File storage, not dev mode.** Dev mode keeps every secret in RAM, so a warm
-# boot restores an empty Vault and every player's game state is gone. The file
-# backend under /var/lib/vault is part of the guest's persistent tree and is
-# therefore included in the warm-boot snapshot.
+# **PostgreSQL storage, not file and not dev mode.** Dev mode keeps every secret
+# in RAM. The file backend kept Vault's data under /var/lib/vault/data, a second
+# store beside PostgreSQL. Vault now uses the `vault_data` database in the same
+# PostgreSQL cluster as the sidechain, so the warm-boot snapshot carries one
+# persistent store. The bootstrap (unseal key, root token, game token) lives in
+# `vault_bootstrap` in the `postgres` database.
 #
 # Loopback only, no TLS: the VM is disposable and the listener is never exposed
 # outside the guest. A deployment beyond the demo puts TLS and an operator-unseal
-# policy in front of this file.
+# policy in front of this database.
 
-storage "file" {
-  path = "/var/lib/vault/data"
+storage "postgresql" {
+  connection_url = "postgres://vault_user:vault@127.0.0.1:5432/vault_data?sslmode=disable"
+  table          = "vault_kv_store"
+  ha_enabled     = "false"
 }
 
 listener "tcp" {

@@ -89,7 +89,8 @@ present.
 | outbox pull/ack API | 2026-11-09 | 12,574 s | exit 0, 226 MB; sealed restore 14/14 PASS, outbox list/ack/empty |
 | outbox replay API | 2026-11-10 | 12,452 s | exit 0, 226 MB; sealed restore 17/17 PASS, replay cycle |
 | local escrow API | 2026-11-10 | stopped | superseded by build 12 (coldboot/warmboot) |
-| coldboot/warmboot Vault | 2026-11-10 | running | twelfth image payload |
+| coldboot/warmboot Vault | 2026-11-10 | stopped | superseded by build 13 (Vault in PostgreSQL) |
+| Vault data in PostgreSQL | 2026-11-10 | running | thirteenth image payload |
 | cold boot (sidechain build) | 2026-11-08 | — | Vault **unsealed**, KV enabled, PostgreSQL tables created |
 
 The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
@@ -97,7 +98,7 @@ binary (timestamp 06:20) and contains the per-player Vault paths.
 
 **Third build (S47 fix):** the in-guest check found Vault `Initialized true` but
 `Sealed true` because `init.json` was a non-JSON file from a failed init and the
-old script skipped re-init. `S47vault` now validates the file, moves invalid
+old script skipped re-init. `S50vault` now validates the file, moves invalid
 init/keyless storage aside, writes through a temp file, unseals and checks
 `Sealed false`. The third image (11,864 s, exit 0) includes the JSON validation; the fifth image
 (12,473 s, exit 0) includes the human-output recovery and the PostgreSQL
@@ -153,9 +154,9 @@ sha256 `c4bd908b…cde0`); restore shell **0 s**, `restore-proof: PASS` for all
 ten checks:
 
 ```
-/etc/init.d/S47vault unseal → OK (sealed=false; scoped token)
+/etc/init.d/S50vault unseal → OK (sealed=false; scoped token)
 vault status → Sealed false
-s47: grep -c game-token /etc/init.d/S47vault → 2
+s47: grep -c game-token /etc/init.d/S50vault → 2
 game-token tokenlen=95; KV read succeeds; vault policy list is denied
 POST /api/assistant restore-p1 → "intent":"status"
 game_state_index → restore-p1 | revision 1 | 676d088eae0d0824
@@ -212,11 +213,11 @@ game_side_blocks: (shard 1, height 1, edits 1), (shard 1, height 2, edits 2)
 game_anchors:     height 1 (parent empty), height 2 (parent = anchor 1 hash)
 ```
 
-**Scoped Vault token.** S47 writes a `nautilus-game` policy and creates an
-orphan token at `/var/lib/vault/game-token` (`0600`); `S52minecraft` exports it
-and the Rust client prefers it over the root token. `unseal` revalidates the
-token and recreates it if `token lookup` fails. Validated against Vault 1.17.6
-in Docker:
+**Scoped Vault token.** S50vault writes a `nautilus-game` policy and creates an
+orphan token in `vault_bootstrap.game_token` (database `postgres`); `S52minecraft`
+reads it with `S50vault game-token` and the Rust client prefers it over the root
+token. `warmboot` revalidates the token and recreates it if `token lookup` fails.
+Validated against Vault 1.17.6 in Docker:
 
 ```
 kv put/get secret/nautilus/game/probe   → 200
@@ -230,7 +231,7 @@ The seventh image predates this change; the eighth payload carries it.
 **D62 — capture Vault sealed.** An unsealed Vault in a warm snapshot restores to
 an empty console. A state captured with Vault stopped or sealed returns a shell
 in 3 s. `vm/validate.sh` defaults `WA_GAME_SEAL_VAULT=1`; after restore run
-`/etc/init.d/S47vault start` (or `unseal`) before reading per-player KV.
+`/etc/init.d/S50vault start` (or `unseal`) before reading per-player KV.
 
 Verified with state8: shell 3 s, unseal `Sealed false`, POST `/api/assistant`
 created `restore-p1`, Vault index `{"players":["restore-p1"],"revision":1}`,
@@ -246,12 +247,12 @@ save. `state7clean` was captured this way and restores a shell in **0 s**; the
 proof is above.
 
 **D81 — cold capture stops Vault; warm boot starts it in the background.** A
-live Vault process in the snapshot still needs the D78 quiet dance. S47 now has
+live Vault process in the snapshot still needs the D78 quiet dance. S50vault has
 two explicit modes:
 
 ```
-S47vault coldboot   # require init.json, stop the daemon, refuse if still running
-S47vault warmboot   # start in the background and return immediately
+S50vault coldboot   # require the PostgreSQL bootstrap; stop the daemon; refuse if running
+S50vault warmboot   # start in the background and return immediately
 ```
 
 `vm/validate.sh` defaults `WA_GAME_STOP_VAULT=1`, `WA_GAME_SEAL_VAULT=0`; the
@@ -261,18 +262,20 @@ The twelfth image is the first cold capture under this policy.
 
 ## 4. What the image now persists
 
-- `/var/lib/vault/data` — file-backend Vault; per-player game state at
-  `secret/data/nautilus/players/<pid>/state`, the index/revision, the audit and
-  wallet secrets. S47 initialises once, stores the unseal key/root token `0600`,
-  re-unseals on boot, and creates the scoped `game-token` (`0600`) the game
-  server actually uses.
-- `/var/lib/pgsql` — PostgreSQL sidechain (`game_edits`, `game_accounts`,
-  `game_side_blocks`, `game_anchors`, `game_outbox`).
-- Both are under `/var/lib` and therefore in the warm-boot snapshot.
+- **PostgreSQL** `/var/lib/pgsql` — the only persistent store:
+  - `nautilus_craft`: sidechain (`game_edits`, `game_accounts`,
+    `game_side_blocks`, `game_anchors`, `game_outbox`);
+  - `vault_data`: Vault's PostgreSQL storage (`vault_kv_store`) with per-player
+    state at `secret/data/nautilus/players/<pid>/state`, the index/revision,
+    the audit and wallet secrets;
+  - `postgres`: `vault_bootstrap` (unseal key, root token, scoped game token).
+- No Vault data is stored as files. `S50vault` waits for `pg_isready`, creates
+  `vault_user`/`vault_data` and `vault_kv_store` on first boot, initialises Vault
+  once, re-unseals, and creates the scoped token.
 
-The `-dev` Vault is gone; `nautilus-dev` is no longer the token. The game server
-reads `/var/lib/vault/game-token`; that token can only touch
-`secret/data/nautilus/*`. Use the root token only for Vault administration.
+The `-dev` Vault and the file backend are gone. The game server reads
+`game_token` from `vault_bootstrap` via `S50vault game-token`; that token can
+only touch `secret/data/nautilus/*`. Use the root token only for administration.
 
 ## 5. Verify before capture
 
@@ -280,10 +283,12 @@ reads `/var/lib/vault/game-token`; that token can only touch
 # in the guest
 wget -qO- http://127.0.0.1/healthz
 vault status
-VAULT_TOKEN=$(cat /var/lib/vault/game-token) vault kv get secret/nautilus/game/index
-VAULT_TOKEN=$(cat /var/lib/vault/game-token) vault kv get secret/nautilus/players/<pid>/state
-VAULT_TOKEN=$(cat /var/lib/vault/game-token) vault policy list   # expect 403
+VAULT_TOKEN=$(/etc/init.d/S50vault game-token) vault kv get secret/nautilus/game/index
+VAULT_TOKEN=$(/etc/init.d/S50vault game-token) vault kv get secret/nautilus/players/<pid>/state
+VAULT_TOKEN=$(/etc/init.d/S50vault game-token) vault policy list   # expect 403
 su - postgres -c "psql -d nautilus_craft -c '\\dt'"
+su - postgres -c "psql -d vault_data -c 'select count(*) from vault_kv_store'"
+su - postgres -c "psql -d postgres -c 'select role, length(value) from vault_bootstrap'"
 ```
 
 Then capture the cold boot with `vm/coldboot-default.sh`; the manifest and the

@@ -44,7 +44,7 @@ cd "$HARNESS"
 export WA_RELAY_PORT="${RELAY_PORT:-8891}"
 # **Vault is stopped for the cold capture, started on the warm boot.** A live
 # Vault process (sealed or not) in the snapshot is the D62/D78 failure shape;
-# the data stays in /var/lib/vault, and the restore proof starts S47vault in the
+# the data stays in /var/lib/vault, and the restore proof starts S50vault in the
 # background before reading state.
 export WA_GAME_STOP_VAULT="${WA_GAME_STOP_VAULT:-1}"
 export WA_GAME_SEAL_VAULT="${WA_GAME_SEAL_VAULT:-0}"
