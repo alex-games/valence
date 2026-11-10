@@ -90,7 +90,8 @@ present.
 | outbox replay API | 2026-11-10 | 12,452 s | exit 0, 226 MB; sealed restore 17/17 PASS, replay cycle |
 | local escrow API | 2026-11-10 | stopped | superseded by build 12 (coldboot/warmboot) |
 | coldboot/warmboot Vault | 2026-11-10 | stopped | superseded by build 13 (Vault in PostgreSQL) |
-| Vault data in PostgreSQL | 2026-11-10 | running | thirteenth image payload |
+| Vault data in PostgreSQL | 2026-11-10 | stopped | superseded by build 14 (no Vault files) |
+| Vault PG-only storage | 2026-11-10 | running | fourteenth image payload |
 | cold boot (sidechain build) | 2026-11-08 | — | Vault **unsealed**, KV enabled, PostgreSQL tables created |
 
 The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
