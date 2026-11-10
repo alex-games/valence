@@ -311,6 +311,74 @@ pub struct Escrow {
     pub updated_at: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Deposit {
+    pub id: String,
+    pub to: String,
+    pub amount: i64,
+    pub status: String,
+    pub at: i64,
+}
+
+/// A coordinator-signed cross-VM operation.
+pub struct EscrowAuth {
+    pub op: String,
+    pub id: String,
+    pub source: String,
+    pub dest: String,
+    pub from: String,
+    pub to: String,
+    pub amount: i64,
+    pub expires_at: i64,
+    pub nonce: String,
+    pub sig: String,
+}
+
+impl EscrowAuth {
+    pub fn message(&self) -> String {
+        format!(
+            "nautilus-escrow-v1|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+            self.op,
+            self.id,
+            self.source,
+            self.dest,
+            self.from,
+            self.to,
+            self.amount,
+            self.expires_at,
+            self.nonce
+        )
+    }
+}
+
+fn hex_decode(value: &str) -> Option<Vec<u8>> {
+    if value.len() % 2 != 0 {
+        return None;
+    }
+    (0..value.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&value[i..i + 2], 16).ok())
+        .collect()
+}
+
+/// The coordinator's Ed25519 public key is pinned in the environment. No key
+/// means no cross-VM deposits: fail closed.
+fn coordinator_key() -> Option<Vec<u8>> {
+    let value = std::env::var("NAUTILUS_ESCROW_PUBKEY").ok()?;
+    hex_decode(value.trim())
+}
+
+fn verify_escrow(auth: &EscrowAuth) -> Result<(), String> {
+    if auth.expires_at < now() {
+        return Err("escrow request expired".into());
+    }
+    let key = coordinator_key().ok_or_else(|| "no coordinator key pinned".to_string())?;
+    let sig = hex_decode(&auth.sig).ok_or_else(|| "bad signature encoding".to_string())?;
+    ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, key)
+        .verify(auth.message().as_bytes(), &sig)
+        .map_err(|_| "bad coordinator signature".to_string())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct Persisted {
     version: u32,
@@ -324,6 +392,9 @@ struct Persisted {
     /// `cancel`, or credited to the receiver on `commit`.
     #[serde(default)]
     escrow: BTreeMap<String, Escrow>,
+    /// Cross-VM deposits, idempotent by escrow id.
+    #[serde(default)]
+    deposits: BTreeMap<String, Deposit>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -386,6 +457,7 @@ fn load_players_from_vault(vault: &VaultStateStore) -> Option<Persisted> {
         players,
         audit,
         escrow: BTreeMap::new(),
+        deposits: BTreeMap::new(),
     })
 }
 
@@ -449,6 +521,7 @@ impl Assistant {
             players: BTreeMap::new(),
             audit: Vec::new(),
             escrow: BTreeMap::new(),
+        deposits: BTreeMap::new(),
         };
         if let Some(path) = &state_path {
             if let Ok(raw) = std::fs::read_to_string(path) {
@@ -553,6 +626,67 @@ impl Assistant {
         self.data.escrow.insert(id.to_owned(), updated.clone());
         self.save();
         Ok(updated)
+    }
+
+    /// Source settlement: the hold stays debited but is not credited locally.
+    /// Only a coordinator-signed `settle` envelope can do this.
+    pub fn escrow_settle(&mut self, auth: &EscrowAuth) -> Result<Escrow, String> {
+        if auth.op != "settle" {
+            return Err("wrong escrow operation".into());
+        }
+        verify_escrow(auth)?;
+        let escrow = self
+            .data
+            .escrow
+            .get(&auth.id)
+            .cloned()
+            .ok_or_else(|| "unknown escrow".to_string())?;
+        if escrow.from != auth.from
+            || escrow.to != auth.to
+            || escrow.amount != auth.amount
+        {
+            return Err("escrow envelope does not match the hold".into());
+        }
+        if escrow.status != "held" {
+            return Err(format!("escrow is {}", escrow.status));
+        }
+        let mut updated = escrow;
+        updated.status = "settled".into();
+        updated.updated_at = now();
+        self.data.escrow.insert(auth.id.clone(), updated.clone());
+        self.save();
+        Ok(updated)
+    }
+
+    /// Destination deposit: credit `to` exactly once for this escrow id. The
+    /// signed envelope is the authorization; without a pinned coordinator key
+    /// this fails closed.
+    pub fn escrow_deposit(&mut self, auth: &EscrowAuth) -> Result<Deposit, String> {
+        if auth.op != "deposit" {
+            return Err("wrong escrow operation".into());
+        }
+        verify_escrow(auth)?;
+        if let Some(existing) = self.data.deposits.get(&auth.id) {
+            if existing.to != auth.to || existing.amount != auth.amount {
+                return Err("deposit id already used for a different transfer".into());
+            }
+            return Ok(existing.clone());
+        }
+        if auth.amount <= 0 {
+            return Err("amount must be positive".into());
+        }
+        let receiver = self.ensure_player(&auth.to);
+        receiver.credits = receiver.credits.saturating_add(auth.amount);
+        let deposit = Deposit {
+            id: auth.id.clone(),
+            to: auth.to.clone(),
+            amount: auth.amount,
+            status: "credited".into(),
+            at: now(),
+        };
+        self.data.deposits.insert(auth.id.clone(), deposit.clone());
+        self.save();
+        Ok(deposit)
     }
 
     pub fn ensure_player(&mut self, name: &str) -> &mut PlayerState {

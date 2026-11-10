@@ -49,6 +49,43 @@ pub fn spawn(addr: String, ai: Arc<Mutex<Assistant>>, level: Level) {
         .ok();
 }
 
+fn parse_escrow_auth(value: &serde_json::Value, op: &str) -> crate::ai::EscrowAuth {
+    fn text(value: &serde_json::Value, key: &str) -> String {
+        value
+            .get(key)
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_owned()
+    }
+    crate::ai::EscrowAuth {
+        op: op.to_owned(),
+        id: text(value, "id"),
+        source: text(value, "source"),
+        dest: text(value, "dest"),
+        from: text(value, "from"),
+        to: text(value, "to"),
+        amount: value.get("amount").and_then(|v| v.as_i64()).unwrap_or(0),
+        expires_at: value
+            .get("expires_at")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0),
+        nonce: text(value, "nonce"),
+        sig: text(value, "sig"),
+    }
+}
+
+fn escrow_error_status(error: &str) -> &'static str {
+    if error.contains("signature")
+        || error.contains("coordinator")
+        || error.contains("expired")
+        || error.contains("operation")
+    {
+        "401 Unauthorized"
+    } else {
+        "400 Bad Request"
+    }
+}
+
 fn handle(mut stream: TcpStream, ai: Arc<Mutex<Assistant>>, level: Level) {
     stream
         .set_read_timeout(Some(std::time::Duration::from_secs(15)))
@@ -334,6 +371,48 @@ fn handle(mut stream: TcpStream, ai: Arc<Mutex<Assistant>>, level: Level) {
             let (status, payload) = match result {
                 Ok(escrow) => ("200 OK", json!({ "escrow": escrow }).to_string()),
                 Err(error) => ("400 Bad Request", json!({ "error": error }).to_string()),
+            };
+            write_response(
+                &mut stream,
+                status,
+                "application/json",
+                payload.as_bytes(),
+                cors,
+                head_only,
+            );
+        }
+        ("POST", "/api/escrow/settle") => {
+            let text = String::from_utf8_lossy(&body);
+            let value: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+            let auth = parse_escrow_auth(&value, "settle");
+            let result = ai.lock().expect("assistant mutex").escrow_settle(&auth);
+            let (status, payload) = match result {
+                Ok(escrow) => ("200 OK", json!({ "escrow": escrow }).to_string()),
+                Err(error) => (
+                    escrow_error_status(&error),
+                    json!({ "error": error }).to_string(),
+                ),
+            };
+            write_response(
+                &mut stream,
+                status,
+                "application/json",
+                payload.as_bytes(),
+                cors,
+                head_only,
+            );
+        }
+        ("POST", "/api/escrow/deposit") => {
+            let text = String::from_utf8_lossy(&body);
+            let value: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+            let auth = parse_escrow_auth(&value, "deposit");
+            let result = ai.lock().expect("assistant mutex").escrow_deposit(&auth);
+            let (status, payload) = match result {
+                Ok(deposit) => ("200 OK", json!({ "deposit": deposit }).to_string()),
+                Err(error) => (
+                    escrow_error_status(&error),
+                    json!({ "error": error }).to_string(),
+                ),
             };
             write_response(
                 &mut stream,
