@@ -58,6 +58,19 @@ cd /localdisk/home/dev/work/ntls-api-builder/nftconsole/buildroot
 ./build2026-minecraft.sh
 ```
 
+To launch it from a script or an agent that must not hold a channel open:
+
+```bash
+ssh -f -n dev@192.168.40.105 \
+  'cd /localdisk/home/dev/work/ntls-api-builder/nftconsole/buildroot &&
+   setsid nohup ./build2026-minecraft.sh > build-minecraft.log 2>&1 < /dev/null'
+```
+
+**Use `-f -n`.** A foreground `ssh` that hits a tool timeout can be retried by
+the caller, which silently starts a second build that removes the log and
+rebuilds the payload. Two runs were lost this way; the detached launcher returns
+in milliseconds and the `setsid`+`nohup` keeps the build alive.
+
 The build creates `build-2026-minecraft/filesystem` and its runtime payload.
 `post-build.sh` refuses a non-i386 ELF and checks `etc/vault/vault.hcl` is
 present.
