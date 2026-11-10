@@ -92,6 +92,7 @@ present.
 | coldboot/warmboot Vault | 2026-11-10 | stopped | superseded by build 13 (Vault in PostgreSQL) |
 | Vault data in PostgreSQL | 2026-11-10 | stopped | superseded by build 14 (no Vault files) |
 | Vault PG-only storage | 2026-11-10 | 12,571 s | exit 0, 226 MB; 24/24 PASS, Storage Type postgresql, NO_VAULT_DIR |
+| cross-VM escrow endpoints | 2026-11-10 | running | fifteenth image payload |
 | cold boot (sidechain build) | 2026-11-08 | — | Vault **unsealed**, KV enabled, PostgreSQL tables created |
 
 The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
@@ -292,6 +293,8 @@ The twelfth image is the first cold capture under this policy.
 The `-dev` Vault and the file backend are gone. The game server reads
 `game_token` from `vault_bootstrap` via `S50vault game-token`; that token can
 only touch `secret/data/nautilus/*`. Use the root token only for administration.
+`S52` also exports `NAUTILUS_ESCROW_PUBKEY` from `/etc/vault/escrow.pub` (public
+half only); `settle`/`deposit` fail closed without it.
 
 ## 5. Verify before capture
 

@@ -21,6 +21,11 @@ case "$1" in
     if [ -n "$VAULT_TOKEN" ]; then
         export VAULT_TOKEN
     fi
+    # The coordinator public key is not secret; the private key never ships.
+    if [ -r /etc/vault/escrow.pub ]; then
+        NAUTILUS_ESCROW_PUBKEY=$(cat /etc/vault/escrow.pub)
+        export NAUTILUS_ESCROW_PUBKEY
+    fi
     NAUTILUS_WEB_ADDR=127.0.0.1:8081 \
     NAUTILUS_MC_ADDR=127.0.0.1:25565 \
     NAUTILUS_STATE=/var/lib/nautilus/state.json \
