@@ -91,7 +91,7 @@ present.
 | local escrow API | 2026-11-10 | stopped | superseded by build 12 (coldboot/warmboot) |
 | coldboot/warmboot Vault | 2026-11-10 | stopped | superseded by build 13 (Vault in PostgreSQL) |
 | Vault data in PostgreSQL | 2026-11-10 | stopped | superseded by build 14 (no Vault files) |
-| Vault PG-only storage | 2026-11-10 | running | fourteenth image payload |
+| Vault PG-only storage | 2026-11-10 | 12,571 s | exit 0, 226 MB; 24/24 PASS, Storage Type postgresql, NO_VAULT_DIR |
 | cold boot (sidechain build) | 2026-11-08 | — | Vault **unsealed**, KV enabled, PostgreSQL tables created |
 
 The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
@@ -197,6 +197,21 @@ GET  /api/outbox        → seq 1 queued again
 POST /api/outbox/ack    → {"acked":1}
 GET  /api/outbox        → {"rows":[]}
 ```
+
+**Fourteenth image status: validated 2026-11-10.** Build `12,571 s`, exit 0,
+226 MB. Cold capture `state14b` (880,758,972 bytes raw / 24 MB zst,
+sha256 `779c1165…4661`); cold shell 66 s, restore shell **0 s**, **24/24 PASS**.
+Vault is PostgreSQL-only:
+
+```
+vault status    → Sealed false | Storage Type postgresql
+/var/lib/vault  → NO_VAULT_DIR
+vault_kv_store  → 41 rows
+vault_bootstrap → game_token 95, root_token 28, unseal_key_b64 44
+```
+
+The scoped token, outbox (list/ack/replay), escrow (open/commit/cancel/overdraw)
+and sidechain checks all passed on the same restore.
 
 **Outbox producer.** The same writer now appends to `game_outbox`:
 
