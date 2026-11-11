@@ -232,6 +232,15 @@ unsealed but stalled the late escrow steps — the D81 stop-Vault policy is
 load-bearing at the floor. The app's bundled business guest is the storefront
 image, a different guest, so its 768 MB was left unchanged.
 
+**Sixteenth-image payload source: the guest state key.** `S50wa-state-key`
+creates `/var/lib/wa/state.key` (32 bytes, 0600) at boot. The 192 MB baseline was
+re-captured with that file inside the guest: `v86state-192.bin.zst` sha256
+`6b2838ad…`, raw 276,991,600 bytes, key sha256 `33a2a362…`. Restoring it returned
+the same key, and a default `?console=1` load from `WorkAgent/VMResources` passed
+25/25. The script is in `vm/board/minecraft/rootfs_overlay/`; the build host's
+`config/board/minecraft` must be synced before the next build, since
+`build2026-minecraft.sh` builds from that checkout.
+
 **Outbox producer.** The same writer now appends to `game_outbox`:
 
 - a state save → `game.state.<pid>` with revision, hash, day, quests, tokens,
