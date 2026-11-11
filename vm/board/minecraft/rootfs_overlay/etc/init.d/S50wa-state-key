@@ -1,0 +1,25 @@
+#!/bin/sh
+#
+# The guest's state-encryption key: 32 random bytes at /var/lib/wa/state.key.
+#
+# **Why in the guest and in the state.** /var/lib is part of the warm-boot
+# snapshot, so the key is saved with everything else the guest needs and every
+# warmboot has it. The harness also reads it over the serial line to encrypt a
+# new capture with the same key, so a change produces a new state that the next
+# warmboot can open.
+#
+# Creating it here (rather than at build time) means the file is present on the
+# first cold boot and on every restore, including a payload that predates it.
+# The key is not a secret from the guest's own root; it protects a state file
+# copied away from the VM, not the running machine.
+
+KEY_DIR=/var/lib/wa
+KEY=$KEY_DIR/state.key
+
+[ -s "$KEY" ] && exit 0
+
+mkdir -p "$KEY_DIR"
+umask 077
+dd if=/dev/urandom of="$KEY" bs=32 count=1 2>/dev/null || exit 1
+chmod 600 "$KEY"
+echo "state key: created $KEY"
