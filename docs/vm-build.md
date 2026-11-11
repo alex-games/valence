@@ -91,8 +91,8 @@ present.
 | local escrow API | 2026-11-10 | stopped | superseded by build 12 (coldboot/warmboot) |
 | coldboot/warmboot Vault | 2026-11-10 | stopped | superseded by build 13 (Vault in PostgreSQL) |
 | Vault data in PostgreSQL | 2026-11-10 | stopped | superseded by build 14 (no Vault files) |
-| Vault PG-only storage | 2026-11-10 | 12,571 s | exit 0, 226 MB; 24/24 PASS, Storage Type postgresql, NO_VAULT_DIR |
-| cross-VM escrow endpoints | 2026-11-10 | running | fifteenth image payload |
+| Vault PG-only storage | 2026-11-10 | 12,571 s | exit 0, 226 MB; 23/23 checks PASS (escrow-auth skipped), Storage Type postgresql, NO_VAULT_DIR; coldboot 160 MB / warmboot 192 MB |
+| cross-VM escrow endpoints | 2026-11-10 | 12,605 s | exit 0, 226 MB; fifteenth image payload; 25/25 checks PASS at 192 MB (cold 160 MB) |
 | cold boot (sidechain build) | 2026-11-08 | — | Vault **unsealed**, KV enabled, PostgreSQL tables created |
 
 The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
@@ -201,8 +201,10 @@ GET  /api/outbox        → {"rows":[]}
 
 **Fourteenth image status: validated 2026-11-10.** Build `12,571 s`, exit 0,
 226 MB. Cold capture `state14b` (880,758,972 bytes raw / 24 MB zst,
-sha256 `779c1165…4661`); cold shell 66 s, restore shell **0 s**, **24/24 PASS**.
-Vault is PostgreSQL-only:
+sha256 `779c1165…4661`); cold shell 66 s, restore shell **0 s**, **23/23 checks
+PASS** (`escrow-auth` skipped), exit 0. The RAM ladder measured **160 MB cold**
+and **192 MB warm**; 160 MB passed one restore and then stalled the `psql`
+storage probe on the repeat. Vault is PostgreSQL-only:
 
 ```
 vault status    → Sealed false | Storage Type postgresql
@@ -213,6 +215,14 @@ vault_bootstrap → game_token 95, root_token 28, unseal_key_b64 44
 
 The scoped token, outbox (list/ack/replay), escrow (open/commit/cancel/overdraw)
 and sidechain checks all passed on the same restore.
+
+**Fifteenth image status: validated 2026-11-10.** Build `12,605 s`, exit 0,
+226 MB; signed `settle`/`deposit` and `/etc/vault/escrow.pub`. Coldboot passed at
+**160 MB** first try; the 160 MB warm state (sha256 `d503aa6c…`) passed two
+24-check restores and then missed Vault's warmboot window, so it was rejected.
+At **192 MB** the state `5704ae46…` passed **25/25 checks twice**, adding
+`escrow-pub` (key `72f429df…372a`) and `escrow-auth` (unsigned deposit `401`).
+Storage remains `postgresql`, `NO_VAULT_DIR`, 41 KV rows.
 
 **Outbox producer.** The same writer now appends to `game_outbox`:
 
