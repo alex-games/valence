@@ -628,6 +628,19 @@ impl Assistant {
         Ok(updated)
     }
 
+    /// Every reservation, oldest first. The reaper lists `held` rows past their
+    /// TTL so a coordinator that died between `open` and `settle` can return the
+    /// sender's credits instead of leaving them locked forever.
+    pub fn escrow_list(&self) -> Vec<Escrow> {
+        let mut rows: Vec<Escrow> = self.data.escrow.values().cloned().collect();
+        rows.sort_by(|a, b| {
+            a.created_at
+                .cmp(&b.created_at)
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        rows
+    }
+
     /// Source settlement: the hold stays debited but is not credited locally.
     /// Only a coordinator-signed `settle` envelope can do this.
     pub fn escrow_settle(&mut self, auth: &EscrowAuth) -> Result<Escrow, String> {
@@ -2477,6 +2490,21 @@ mod tests {
         assert_eq!(cancelled.status, "cancelled");
         assert_eq!(ai.ensure_player("alice").credits, from_start - 120);
         assert!(ai.escrow_cancel(&refund.id).is_err());
+    }
+
+    #[test]
+    fn escrow_list_returns_held_for_the_reaper() {
+        let mut ai = Assistant::in_memory(level());
+        let held = ai.escrow_open("alice", "bob", 40).expect("open");
+        let done = ai.escrow_open("alice", "bob", 5).expect("open done");
+        ai.escrow_commit(&done.id).expect("commit");
+
+        let rows = ai.escrow_list();
+        assert_eq!(rows.len(), 2);
+        let open: Vec<&Escrow> = rows.iter().filter(|e| e.status == "held").collect();
+        assert_eq!(open.len(), 1);
+        assert_eq!(open[0].id, held.id);
+        assert!(rows.iter().all(|e| e.created_at > 0));
     }
 
     #[test]

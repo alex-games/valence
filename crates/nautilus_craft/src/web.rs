@@ -335,6 +335,18 @@ fn handle(mut stream: TcpStream, ai: Arc<Mutex<Assistant>>, level: Level) {
                 }
             }
         }
+        ("GET" | "HEAD", "/api/escrow/list") => {
+            let rows = ai.lock().expect("assistant mutex").escrow_list();
+            let payload = json!({ "escrows": rows }).to_string();
+            write_response(
+                &mut stream,
+                "200 OK",
+                "application/json",
+                payload.as_bytes(),
+                cors,
+                head_only,
+            );
+        }
         ("POST", "/api/escrow/open") => {
             let text = String::from_utf8_lossy(&body);
             let value: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
