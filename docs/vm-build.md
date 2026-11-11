@@ -91,8 +91,8 @@ present.
 | local escrow API | 2026-11-10 | stopped | superseded by build 12 (coldboot/warmboot) |
 | coldboot/warmboot Vault | 2026-11-10 | stopped | superseded by build 13 (Vault in PostgreSQL) |
 | Vault data in PostgreSQL | 2026-11-10 | stopped | superseded by build 14 (no Vault files) |
-| Vault PG-only storage | 2026-11-10 | 12,571 s | exit 0, 226 MB; 23/23 checks PASS (escrow-auth skipped), Storage Type postgresql, NO_VAULT_DIR; coldboot 160 MB / warmboot 192 MB |
-| cross-VM escrow endpoints | 2026-11-10 | 12,605 s | exit 0, 226 MB; fifteenth image payload; 25/25 checks PASS at 192 MB (cold 160 MB) |
+| Vault PG-only storage | 2026-11-10 | 12,571 s | exit 0, 226 MB; 24/24 checks PASS (escrow-auth skipped), Storage Type postgresql, NO_VAULT_DIR; coldboot 160 MB / warmboot 192 MB |
+| cross-VM escrow endpoints | 2026-11-10 | 12,605 s | exit 0, 226 MB; fifteenth image payload; 26/26 checks PASS at 192 MB (cold 160 MB) |
 | cold boot (sidechain build) | 2026-11-08 | — | Vault **unsealed**, KV enabled, PostgreSQL tables created |
 
 The second build's `rootfs/usr/bin/minecraft-server` is the 15 MB i686 static
@@ -201,7 +201,7 @@ GET  /api/outbox        → {"rows":[]}
 
 **Fourteenth image status: validated 2026-11-10.** Build `12,571 s`, exit 0,
 226 MB. Cold capture `state14b` (880,758,972 bytes raw / 24 MB zst,
-sha256 `779c1165…4661`); cold shell 66 s, restore shell **0 s**, **23/23 checks
+sha256 `779c1165…4661`); cold shell 66 s, restore shell **0 s**, **24/24 checks
 PASS** (`escrow-auth` skipped), exit 0. The RAM ladder measured **160 MB cold**
 and **192 MB warm**; 160 MB passed one restore and then stalled the `psql`
 storage probe on the repeat. Vault is PostgreSQL-only:
@@ -220,7 +220,7 @@ and sidechain checks all passed on the same restore.
 226 MB; signed `settle`/`deposit` and `/etc/vault/escrow.pub`. Coldboot passed at
 **160 MB** first try; the 160 MB warm state (sha256 `d503aa6c…`) passed two
 24-check restores and then missed Vault's warmboot window, so it was rejected.
-At **192 MB** the state `5704ae46…` passed **25/25 checks twice**, adding
+At **192 MB** the state `5704ae46…` passed **26/26 checks twice**, adding
 `escrow-pub` (key `72f429df…372a`) and `escrow-auth` (unsigned deposit `401`).
 Storage remains `postgresql`, `NO_VAULT_DIR`, 41 KV rows.
 
@@ -237,9 +237,15 @@ creates `/var/lib/wa/state.key` (32 bytes, 0600) at boot. The 192 MB baseline wa
 re-captured with that file inside the guest: `v86state-192.bin.zst` sha256
 `6b2838ad…`, raw 276,991,600 bytes, key sha256 `33a2a362…`. Restoring it returned
 the same key, and a default `?console=1` load from `WorkAgent/VMResources` passed
-25/25. The script is in `vm/board/minecraft/rootfs_overlay/`; the build host's
+26/26. The script is in `vm/board/minecraft/rootfs_overlay/`; the build host's
 `config/board/minecraft` must be synced before the next build, since
 `build2026-minecraft.sh` builds from that checkout.
+
+The warmboot gate now spells out the sequence: `S50vault warmboot` prints
+`Warming vault` and reaches `Sealed false`, `/healthz` answers `status:ok`, and
+`ai-tools` runs `/bin/bash`, `/usr/bin/python3` and `/usr/bin/psql` (PostgreSQL
+18.6) in the restored guest. The keyed state's encrypted copy restored 26/26
+through `WA_RESTORE_STATE_ENC`, with the temporary plaintext file removed.
 
 **Outbox producer.** The same writer now appends to `game_outbox`:
 
