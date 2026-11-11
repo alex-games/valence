@@ -224,6 +224,14 @@ At **192 MB** the state `5704ae46…` passed **25/25 checks twice**, adding
 `escrow-pub` (key `72f429df…372a`) and `escrow-auth` (unsigned deposit `401`).
 Storage remains `postgresql`, `NO_VAULT_DIR`, 41 KV rows.
 
+**The runtime now defaults to 192 MB.** `vm/runtime/index.html` requests 192 by
+default and pins `BASELINE_STATE=/vm/state/v86state-192.bin.zst` (the
+`5704ae46…` stop-Vault state); `S50vault warmboot` starts Vault after the restore.
+A services-up capture at 192 MB (`WA_REQUIRE_LIVE_VAULT=1`) restored with Vault
+unsealed but stalled the late escrow steps — the D81 stop-Vault policy is
+load-bearing at the floor. The app's bundled business guest is the storefront
+image, a different guest, so its 768 MB was left unchanged.
+
 **Outbox producer.** The same writer now appends to `game_outbox`:
 
 - a state save → `game.state.<pid>` with revision, hash, day, quests, tokens,
