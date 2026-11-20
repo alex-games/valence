@@ -153,6 +153,13 @@ const MAP_SHARDS: usize = 4;
 const SIDECHAINS: usize = 4;
 const GENESIS: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
+/// When the command centre is the miner, the bridge must not publish a
+/// competing anchor or put one in `map/state`; the phone keeps the CC's retained
+/// `ledger/anchor` instead of having it overwritten by the map snapshot.
+fn external_miner() -> bool {
+    std::env::var("NC_MINER").map(|v| v.eq_ignore_ascii_case("cc")).unwrap_or(false)
+}
+
 fn now() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
 }
@@ -395,6 +402,7 @@ fn map_state(hub: &Hub, ledger: &Mutex<LevelLedger>, at: i64) -> Value {
         };
         (edits, g.anchor.clone(), g.revision)
     };
+    let anchor = if external_miner() { None } else { anchor };
     json!({
         "v": 1, "revision": revision, "edits": edits, "anchor": anchor, "at": at
     })
@@ -601,7 +609,7 @@ fn publisher(client: Client, hub: Arc<Hub>, ledger: Arc<Mutex<LevelLedger>>, dir
             }
             last_side = std::time::Instant::now();
         }
-        if last_anchor.elapsed() > Duration::from_secs(10) {
+        if !external_miner() && last_anchor.elapsed() > Duration::from_secs(10) {
             let at = now();
             let value = { ledger.lock().unwrap().anchor(at) };
             if let Some(value) = value {

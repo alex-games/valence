@@ -102,6 +102,16 @@ impl Store {
                    key text PRIMARY KEY,
                    value text NOT NULL
                  );
+                 CREATE TABLE IF NOT EXISTS cms_entries (
+                   kind text NOT NULL,
+                   slug text NOT NULL,
+                   title text NOT NULL,
+                   data jsonb NOT NULL,
+                   published boolean NOT NULL DEFAULT true,
+                   version bigint NOT NULL DEFAULT 1,
+                   updated_at timestamptz NOT NULL DEFAULT now(),
+                   PRIMARY KEY (kind, slug)
+                 );
                  CREATE TABLE IF NOT EXISTS game_edits (
                    world text NOT NULL,
                    x int NOT NULL,
@@ -213,6 +223,79 @@ impl Store {
             .map(|r| r.get::<_, String>(0)))
         })
         .flatten()
+    }
+
+    /// One CMS collection, as the JSON objects the page expects.
+    fn cms(&self, kind: &str) -> Vec<Value> {
+        self.with(|c| {
+            let rows = c.query(
+                "SELECT data::text FROM cms_entries
+                 WHERE kind = $1 AND published ORDER BY slug",
+                &[&kind],
+            )?;
+            Ok(rows
+                .into_iter()
+                .filter_map(|r| serde_json::from_str::<Value>(&r.get::<_, String>(0)).ok())
+                .collect())
+        })
+        .unwrap_or_default()
+    }
+
+    fn cms_entry(&self, kind: &str, slug: &str) -> Option<Value> {
+        self.with(|c| {
+            Ok(c.query_opt(
+                "SELECT data::text FROM cms_entries
+                 WHERE kind = $1 AND slug = $2 AND published",
+                &[&kind, &slug],
+            )?
+            .and_then(|r| serde_json::from_str::<Value>(&r.get::<_, String>(0)).ok()))
+        })
+        .flatten()
+    }
+
+    /// Seed the CMS from the bundled world once; existing rows are preserved so
+    /// an operator's edit survives a server restart or a world-version bump.
+    fn seed_cms(&self) {
+        let parsed: Value = serde_json::from_str(WORLD).unwrap_or_else(|_| json!({}));
+        let kinds = [
+            ("businesses", "id", "name"),
+            ("quests", "id", "title"),
+            ("npcs", "id", "name"),
+            ("pois", "name", "name"),
+            ("tokens", "id", "id"),
+        ];
+        self.with(|c| {
+            for (kind, id_key, title_key) in kinds {
+                let Some(items) = parsed.get(kind).and_then(|v| v.as_array()) else { continue };
+                for item in items {
+                    let slug = item.get(id_key).map(|v| match v.as_str() {
+                        Some(s) => s.to_string(),
+                        None => v.to_string().trim_matches('"').to_string(),
+                    }).unwrap_or_default();
+                    if slug.is_empty() { continue; }
+                    let title = item.get(title_key).and_then(|v| v.as_str())
+                        .unwrap_or(&slug).to_string();
+                    let body = item.to_string();
+                    c.execute(
+                        "INSERT INTO cms_entries(kind,slug,title,data) VALUES($1,$2,$3,$4::jsonb)
+                         ON CONFLICT(kind,slug) DO NOTHING",
+                        &[&kind, &slug, &title, &body],
+                    )?;
+                }
+            }
+            Ok(())
+        });
+    }
+
+    /// The world the page receives: the published `game_world` base with every
+    /// CMS collection overlaid. With no CMS rows the embedded/DB world is used.
+    fn world_composed(&self) -> String {
+        let base = self.world().unwrap_or_else(|| WORLD.to_string());
+        let mut collections = std::collections::HashMap::new();
+        for kind in ["businesses", "quests", "npcs", "pois", "tokens"] {
+            collections.insert(kind.to_string(), self.cms(kind));
+        }
+        compose_world(&base, &collections)
     }
 
     fn edits(&self) -> Vec<((i32, i32, i32), i32)> {
@@ -1439,8 +1522,48 @@ fn serve_http(mut stream: TcpStream, hub: Arc<Hub>, head: String) {
         return;
     }
 
+    if path == "/api/cms" {
+        let kinds = ["businesses", "quests", "npcs", "pois", "tokens"];
+        let mut entries = serde_json::Map::new();
+        for kind in kinds {
+            entries.insert(kind.to_string(), Value::Array(hub.store.cms(kind)));
+        }
+        let body = json!({
+            "world": WORLD_SLUG, "database": "nautilus_craft",
+            "kinds": entries,
+        }).to_string();
+        let _ = write_http(&mut stream, "200 OK", "application/json", body.as_bytes(), head_only);
+        return;
+    }
+
+    if let Some(rest) = path.strip_prefix("/api/cms/") {
+        let mut parts = rest.splitn(2, '/');
+        let kind = parts.next().unwrap_or("");
+        let allowed = ["businesses", "quests", "npcs", "pois", "tokens", "pages", "campaigns"];
+        if !allowed.contains(&kind) {
+            let _ = write_http(&mut stream, "404 Not Found", "application/json",
+                                b"{\"error\":\"unknown cms kind\"}", head_only);
+            return;
+        }
+        let body = if let Some(raw_slug) = parts.next() {
+            let slug = raw_slug.replace("%20", " ");
+            match hub.store.cms_entry(kind, &slug) {
+                Some(entry) => json!({"kind": kind, "slug": slug, "entry": entry}).to_string(),
+                None => {
+                    let _ = write_http(&mut stream, "404 Not Found", "application/json",
+                                        b"{\"error\":\"not found\"}", head_only);
+                    return;
+                }
+            }
+        } else {
+            json!({"kind": kind, "entries": hub.store.cms(kind)}).to_string()
+        };
+        let _ = write_http(&mut stream, "200 OK", "application/json", body.as_bytes(), head_only);
+        return;
+    }
+
     if path == "/api/world" {
-        let world = hub.store.world().unwrap_or_else(|| WORLD.to_string());
+        let world = hub.store.world_composed();
         let _ = write_http(&mut stream, "200 OK", "application/json", world.as_bytes(), head_only);
         return;
     }
@@ -1463,7 +1586,7 @@ fn serve_http(mut stream: TcpStream, hub: Arc<Hub>, head: String) {
         let body = json!({
             "database": "nautilus_craft", "db": db, "assets": assets,
             "edits": edits, "scores": scores,
-            "tables": ["game_assets", "game_world", "game_meta", "game_edits", "game_scores"]
+            "tables": ["game_assets", "game_world", "game_meta", "game_edits", "game_scores", "cms_entries"]
         })
         .to_string();
         let _ = write_http(&mut stream, "200 OK", "application/json", body.as_bytes(), head_only);
@@ -1471,7 +1594,7 @@ fn serve_http(mut stream: TcpStream, hub: Arc<Hub>, head: String) {
     }
 
     if path == "/" || path == "/index.html" || path == "/embed" || path == "/embed/" {
-        let world = hub.store.world().unwrap_or_else(|| WORLD.to_string());
+        let world = hub.store.world_composed();
         let (html, source) = match hub.store.asset("/index.html") {
             Some((_, body)) => (String::from_utf8_lossy(&body).to_string(), "postgres"),
             None => (String::from_utf8_lossy(INDEX).to_string(), "embedded"),
@@ -1525,6 +1648,46 @@ fn handle_conn(mut stream: TcpStream, hub: Arc<Hub>) {
         handle_ws(stream, hub, head);
     } else {
         serve_http(stream, hub, head);
+    }
+}
+
+/// Overlay the CMS collections on the base world. Pure so the composition can
+/// be tested without PostgreSQL; the server calls it with rows read from
+/// `cms_entries`.
+fn compose_world(base: &str, collections: &std::collections::HashMap<String, Vec<Value>>) -> String {
+    let Ok(mut value) = serde_json::from_str::<Value>(base) else {
+        return base.to_string();
+    };
+    for kind in ["businesses", "quests", "npcs", "pois", "tokens"] {
+        if let Some(entries) = collections.get(kind) {
+            if !entries.is_empty() {
+                value[kind] = Value::Array(entries.clone());
+            }
+        }
+    }
+    value.to_string()
+}
+
+#[cfg(test)]
+mod cms_tests {
+    use super::*;
+
+    #[test]
+    fn cms_collections_replace_the_base_arrays() {
+        let base = r#"{"title":"Torrance","businesses":[{"id":"old"}],"quests":[{"id":"q"}]}"#;
+        let mut collections = std::collections::HashMap::new();
+        collections.insert("businesses".to_string(), vec![json!({"id":"new","name":"New"})]);
+        let out = compose_world(base, &collections);
+        let value: Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(value["title"], "Torrance");
+        assert_eq!(value["businesses"][0]["id"], "new");
+        assert_eq!(value["quests"][0]["id"], "q", "an empty CMS collection leaves the base");
+    }
+
+    #[test]
+    fn invalid_base_is_returned_unchanged() {
+        let collections = std::collections::HashMap::new();
+        assert_eq!(compose_world("not json", &collections), "not json");
     }
 }
 
@@ -1618,6 +1781,7 @@ fn main() {
         match store.init() {
             Ok(()) => {
                 ready = true;
+                store.seed_cms();
                 eprintln!("[db] ready after {attempt} attempt(s)");
                 break;
             }
