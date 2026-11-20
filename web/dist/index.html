@@ -1372,6 +1372,18 @@ const canvas = $('gl');
 const GAME_DENSITY = Math.max(1, Math.min(3,
   Number(new URLSearchParams(location.search).get('density')) || 1));
 const renderDpr = () => Math.min(3, Math.max(1, 3 / GAME_DENSITY));
+// **World zoom is the camera FOV, not the WebView scale.** Zooming the page
+// changes the HUD only; the canvas is always the panel. A wider vertical field
+// of view puts more blocks on the same panel without touching the backing store.
+// 88° is the wide default; 72° is the old standard and 100° is the widest.
+const GAME_FOV = Math.max(60, Math.min(110,
+  Number(new URLSearchParams(location.search).get('fov')) || 88));
+let viewFov = GAME_FOV;
+const FOG_NEAR = 64, FOG_FAR = 124;
+function setViewFov(deg) {
+  viewFov = Math.max(60, Math.min(110, Number(deg) || GAME_FOV));
+  return viewFov;
+}
 const labelsEl = $('labels');
 const coordsEl = $('coords');
 const fpsEl = $('fps');
@@ -3971,6 +3983,8 @@ function renderInfo() {
   const dpr = renderDpr();
   return {
     density: GAME_DENSITY,
+    fov: viewFov,
+    fog: [FOG_NEAR, FOG_FAR],
     dpr,
     css: [innerWidth, innerHeight],
     canvas: [canvas.width, canvas.height],
@@ -4285,7 +4299,7 @@ function frame(now) {
   up[2] = right[0] * fwd[1] - right[1] * fwd[0];
   resize();
   const aspect = canvas.width / canvas.height;
-  mat4Perspective(proj, 72 * Math.PI / 180, aspect, 0.08, 240);
+  mat4Perspective(proj, viewFov * Math.PI / 180, aspect, 0.08, 260);
   mat4LookAt(view, eye, fwd, [0, 1, 0]);
   mat4Multiply(vp, proj, view);
 
@@ -4299,7 +4313,7 @@ function frame(now) {
   gl.uniform3f(gl.getUniformLocation(skyProg, 'uFwd'), fwd[0], fwd[1], fwd[2]);
   gl.uniform3f(gl.getUniformLocation(skyProg, 'uRight'), right[0], right[1], right[2]);
   gl.uniform3f(gl.getUniformLocation(skyProg, 'uUp'), up[0], up[1], up[2]);
-  const tanF = Math.tan(36 * Math.PI / 180);
+  const tanF = Math.tan((viewFov / 2) * Math.PI / 180);
   gl.uniform2f(gl.getUniformLocation(skyProg, 'uTan'), tanF * aspect, tanF);
   gl.uniform3f(gl.getUniformLocation(skyProg, 'uSun'), SUN[0], SUN[1], SUN[2]);
   gl.bindVertexArray(skyVao);
@@ -4314,8 +4328,8 @@ function frame(now) {
   gl.uniformMatrix4fv(gl.getUniformLocation(blockProg, 'uVP'), false, vp);
   gl.uniform3f(gl.getUniformLocation(blockProg, 'uEye'), eye[0], eye[1], eye[2]);
   gl.uniform3f(gl.getUniformLocation(blockProg, 'uFog'), FOG[0], FOG[1], FOG[2]);
-  gl.uniform1f(gl.getUniformLocation(blockProg, 'uFogNear'), 54);
-  gl.uniform1f(gl.getUniformLocation(blockProg, 'uFogFar'), 92);
+  gl.uniform1f(gl.getUniformLocation(blockProg, 'uFogNear'), FOG_NEAR);
+  gl.uniform1f(gl.getUniformLocation(blockProg, 'uFogFar'), FOG_FAR);
   gl.uniform1f(gl.getUniformLocation(blockProg, 'uAlphaTest'), 0.5);
 
   gl.enable(gl.CULL_FACE);
@@ -5259,6 +5273,11 @@ async function runGameAction(action, args) {
 
   if (name === 'status') return snap();
 
+  if (name === 'view') {
+    const fov = setViewFov(opts.fov);
+    return snap({ fov });
+  }
+
   if (name === 'walk') {
     const forward = clamp(Number(opts.forward) || 0, -1, 1);
     const right = clamp(Number(opts.right) || 0, -1, 1);
@@ -5279,8 +5298,9 @@ async function runGameAction(action, args) {
   }
 
   if (name === 'goto') {
-    // Open-ground steering only: it does not path around a wall. The reported
-    // `distance` is what tells a caller it is stuck.
+    // A* over the walkable voxel surface, with straight steering as the fallback
+    // when no path exists. The reported `distance` is what tells a caller it is
+    // stuck.
     let tx = Number(opts.x), tz = Number(opts.z);
     const placeName = String(opts.place || '').trim().toLowerCase();
     if (placeName) {
@@ -5851,6 +5871,10 @@ window.__nc = {
   get quests() { return QUESTS.map((q) => ({ id: q.id, done: !!state.quests[q.id] })); },
   get manifest() { return WORLD; },
   renderInfo() { return renderInfo(); },
+  view: { fov: setViewFov,
+          info: () => ({ fov: viewFov, fog: [FOG_NEAR, FOG_FAR],
+                         tanHalf: Math.tan(viewFov * Math.PI / 360),
+                         aspect: canvas.width / Math.max(1, canvas.height) }) },
   get orders() { return state.orders.map((o) => ({ ...o })); },
   get focusCounts() { return { ...state.focusCounts }; },
   intent(text) { return intentTool(text); },
