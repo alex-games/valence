@@ -383,6 +383,7 @@ body.touch #touch { display: block; }
 }
 
 /* --- gesture navigation (Settings → Game controls → Gestures) --- */
+body.controls-gamepad #touch { display: none !important; }
 body.gestures #actions,
 body.gestures #pad { display: none !important; }
 body.gestures #stick { display: none; }
@@ -1538,7 +1539,13 @@ const satsEl = $('sats');
 const IS_TOUCH = matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window);
 const NATIVE = new URLSearchParams(location.search).get('native') === '1';
 const GESTURE_NAV = new URLSearchParams(location.search).get('gestures') === '1';
-if (NATIVE) { document.body.classList.add('native'); minimapEl.classList.add('show'); }
+const CONTROLS = new URLSearchParams(location.search).get('controls') ||
+  (GESTURE_NAV ? 'gestures' : (NATIVE ? 'legacy' : 'touch'));
+if (NATIVE) {
+  document.body.classList.add('native');
+  document.body.classList.add('controls-' + CONTROLS);
+  minimapEl.classList.add('show');
+}
 if (GESTURE_NAV) document.body.classList.add('gestures');
 if (IS_TOUCH) document.body.classList.add('touch');
 const gestureHelpEl = $('gestureHelp');
