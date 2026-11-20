@@ -4958,19 +4958,19 @@ function renderStatus() {
 // target. The target validates opt-in and range on its own copy of the world.
 // No wallet key, photo or private state is on this path. The server is not the
 // authority for combat yet; a competitive deployment must validate hits there.
-const PVP = { enabled: false, health: 100, maxHealth: 100, kills: 0, deaths: 0,
+const PVP = { enabled: false, team: '', health: 100, maxHealth: 100, kills: 0, deaths: 0,
   lastHitAt: 0, respawnAt: 0, feed: [], auto: false, autoTimer: 0, recent: [], sent: 0 };
 function publishPvPState() {
   if (!NET.connected) return;
   mqttPublish('pvp/' + NET.pid + '/state', {
-    name: NET.name, enabled: PVP.enabled, auto: PVP.auto, health: PVP.health,
+    name: NET.name, team: PVP.team, enabled: PVP.enabled, auto: PVP.auto, health: PVP.health,
     kills: PVP.kills, deaths: PVP.deaths, at: Date.now()
   }, 1, true);
 }
 function renderPvP() {
   const line = $('pvpLine'), board = $('pvpBoard'), toggle = $('pvpToggle');
   if (line) line.textContent = PVP.enabled
-    ? `PVP ON · ${PVP.health}/${PVP.maxHealth} HP · ${PVP.kills} kills · ${PVP.deaths} deaths` + (PVP.auto ? ' · AUTO' : '')
+    ? `PVP ON${PVP.team ? ' · ' + PVP.team.toUpperCase() : ''} · ${PVP.health}/${PVP.maxHealth} HP · ${PVP.kills} kills · ${PVP.deaths} deaths` + (PVP.auto ? ' · AUTO' : '')
     : 'Disabled · no damage';
   if (toggle) toggle.textContent = PVP.enabled ? 'DISABLE PVP' : 'ENABLE PVP';
   const autoBtn = $('pvpAuto');
@@ -5024,6 +5024,7 @@ function pvpAttack(targetPid) {
     if (pid === NET.pid) continue;
     const st = NET.pvp.get(pid);
     if (!st || !st.enabled || (st.health | 0) <= 0) continue;
+    if (PVP.team && st.team === PVP.team) continue;
     const d = Math.hypot((p.x || 0) - player.x, (p.z || 0) - player.z);
     if (d < best) { best = d; target = pid; }
   }
@@ -5033,13 +5034,16 @@ function pvpAttack(targetPid) {
     if (!p || !st || !st.enabled || (st.health | 0) <= 0 || d > 4.5) {
       return { ok: false, reason: 'no-target' };
     }
+    if (PVP.team && st.team === PVP.team) {
+      return { ok: false, reason: 'friendly' };
+    }
     target = targetPid; best = d;
   }
   if (!target) { toast('NO PVP TARGET IN RANGE', 2200); return { ok: false, reason: 'no-target' }; }
   PVP.lastHitAt = now;
   PVP.sent += 1;
   publishPvPState();
-  mqttPublish('pvp/' + target + '/hit', { from: NET.pid, to: target, damage: 20, at: now }, 1, false);
+  mqttPublish('pvp/' + target + '/hit', { from: NET.pid, team: PVP.team, to: target, damage: 20, at: now }, 1, false);
   const name = (NET.players.get(target) || {}).name || target;
   PVP.feed.push(`${NET.name} hit ${name}`);
   mqttPublish('pvp/feed', { text: `${NET.name} hit ${name}`, at: now }, 1, false);
@@ -5049,6 +5053,7 @@ function pvpAttack(targetPid) {
 }
 function pvpHandleHit(data) {
   if (!data || data.to !== NET.pid || !PVP.enabled || PVP.health <= 0) return;
+  if (data.team && PVP.team && data.team === PVP.team) return;
   if (!pvpOnce(data.at ? 'hit:' + (data.from || '') + ':' + data.at : '')) return;
   PVP.health = Math.max(0, PVP.health - (Number(data.damage) || 20));
   publishPvPState();
@@ -5114,6 +5119,11 @@ function setAutoDuel(on) {
 function pvpCommand(data) {
   if (!data || typeof data.action !== 'string') return;
   if (data.to && data.to !== NET.pid && data.to !== NET.name) return;
+  if (data.team !== undefined) {
+    PVP.team = String(data.team || '').slice(0, 16);
+    if (PVP.enabled) publishPvPState();
+    renderPvP();
+  }
   switch (data.action) {
     case 'pvp-on': if (!PVP.enabled) togglePvP(); break;
     case 'pvp-off': if (PVP.enabled) togglePvP(); break;
@@ -5233,7 +5243,7 @@ async function runGameAction(action, args) {
     ok: true, action: String(action || 'status'),
     pid: NET.pid, connected: !!NET.connected,
     x: player.x, y: player.y, z: player.z, yaw: player.yaw, pitch: player.pitch,
-    health: PVP.health, pvp: PVP.enabled, auto: PVP.auto,
+    health: PVP.health, pvp: PVP.enabled, team: PVP.team, auto: PVP.auto,
     kills: PVP.kills, deaths: PVP.deaths,
     placed: state.placed, broken: state.broken,
     nearNpc: nearNPC ? nearNPC.name : null,
@@ -5363,6 +5373,11 @@ async function runGameAction(action, args) {
 
   if (name === 'pvp') {
     const sub = String(opts.subaction || '').toLowerCase();
+    if (opts.team !== undefined) {
+      PVP.team = String(opts.team || '').slice(0, 16);
+      if (PVP.enabled) publishPvPState();
+      renderPvP();
+    }
     if (sub === 'on' && !PVP.enabled) togglePvP();
     else if (sub === 'off' && PVP.enabled) togglePvP();
     else if (sub === 'auto' || sub === 'duel') setAutoDuel(true);
@@ -5914,8 +5929,9 @@ window.__nc = {
   publish: (suffix, payload, qos, retain) => mqttPublish(suffix, payload, qos, retain),
   pvp: { enable: () => { if (!PVP.enabled) togglePvP(); return PVP.enabled; },
          disable: () => { if (PVP.enabled) togglePvP(); return PVP.enabled; },
-         toggle: togglePvP, status: () => ({ enabled: PVP.enabled, auto: PVP.auto, health: PVP.health, kills: PVP.kills, deaths: PVP.deaths, sent: PVP.sent }),
+         toggle: togglePvP, status: () => ({ enabled: PVP.enabled, auto: PVP.auto, team: PVP.team, health: PVP.health, kills: PVP.kills, deaths: PVP.deaths, sent: PVP.sent, feed: PVP.feed.slice(-10) }),
          auto: setAutoDuel,
+         team: (name) => { PVP.team = String(name || '').slice(0, 16); if (PVP.enabled) publishPvPState(); renderPvP(); return PVP.team; },
          peers: () => [...NET.pvp.entries()],
          attack: (pid) => pvpAttack(pid) },
   start: startGame,
