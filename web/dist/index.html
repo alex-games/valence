@@ -14,12 +14,14 @@
   if (meta) meta.setAttribute('content',
     'width=device-width, initial-scale=' + (1 / density) +
     ', maximum-scale=1, user-scalable=no, viewport-fit=cover');
+  document.documentElement.style.setProperty('--ui-scale', String(density));
 })();
 </script>
 <meta name="theme-color" content="#8ec5e8">
 <meta name="description" content="Nautilus Craft — a beginner voxel level modelled on Torrance, California, served by nginx from the Minecraft VM.">
 <title>Nautilus Craft — Torrance Beginner Level</title>
 <style>:root {
+  --ui-scale: 1;
   --panel: rgba(9, 15, 18, 0.80);
   --panel-2: rgba(14, 22, 26, 0.92);
   --line: rgba(255, 255, 255, 0.15);
@@ -211,30 +213,36 @@ body.touch #gl { cursor: default; }
   bottom: calc(12px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   display: flex;
-  gap: 4px;
-  padding: 5px;
+  gap: calc(4px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale));
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: calc(10px * var(--ui-scale));
   box-shadow: var(--shadow);
   z-index: 5;
 }
 .slot {
-  width: 44px;
-  height: 44px;
+  width: calc(44px * var(--ui-scale));
+  height: calc(44px * var(--ui-scale));
   border: 2px solid rgba(255, 255, 255, 0.12);
-  border-radius: 7px;
+  border-radius: calc(7px * var(--ui-scale));
   background: rgba(255, 255, 255, 0.04);
   position: relative;
   cursor: pointer;
   image-rendering: pixelated;
 }
-.slot canvas { position: absolute; inset: 4px; width: 32px; height: 32px; image-rendering: pixelated; }
+.slot canvas {
+  position: absolute;
+  inset: calc(4px * var(--ui-scale));
+  width: calc(32px * var(--ui-scale));
+  height: calc(32px * var(--ui-scale));
+  image-rendering: pixelated;
+}
 .slot.sel { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(244, 201, 93, 0.35); }
 .slot .num {
   position: absolute;
-  left: 3px; top: 1px;
-  font-size: 8px;
+  left: calc(3px * var(--ui-scale)); top: calc(1px * var(--ui-scale));
+  font-size: calc(8px * var(--ui-scale));
   color: rgba(255, 255, 255, 0.55);
 }
 
@@ -323,7 +331,8 @@ body.touch #touch { display: block; }
   position: absolute;
   left: calc(18px + env(safe-area-inset-left));
   bottom: calc(84px + env(safe-area-inset-bottom));
-  width: 124px; height: 124px;
+  width: calc(124px * var(--ui-scale));
+  height: calc(124px * var(--ui-scale));
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.22);
   background: radial-gradient(circle, rgba(255,255,255,0.10), rgba(255,255,255,0.02) 70%);
@@ -333,8 +342,9 @@ body.touch #touch { display: block; }
 #knob {
   position: absolute;
   left: 50%; top: 50%;
-  width: 52px; height: 52px;
-  margin: -26px 0 0 -26px;
+  width: calc(52px * var(--ui-scale));
+  height: calc(52px * var(--ui-scale));
+  margin: calc(-26px * var(--ui-scale)) 0 0 calc(-26px * var(--ui-scale));
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.22);
   border: 1px solid rgba(255, 255, 255, 0.45);
@@ -346,27 +356,109 @@ body.touch #touch { display: block; }
   right: calc(16px + env(safe-area-inset-right));
   bottom: calc(80px + env(safe-area-inset-bottom));
   display: grid;
-  grid-template-columns: 58px 58px;
-  grid-gap: 8px;
+  grid-template-columns: calc(58px * var(--ui-scale)) calc(58px * var(--ui-scale));
+  grid-gap: calc(8px * var(--ui-scale));
   z-index: 7;
 }
 #actions button {
-  width: 58px; height: 58px;
+  width: calc(58px * var(--ui-scale));
+  height: calc(58px * var(--ui-scale));
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.28);
   background: rgba(10, 16, 20, 0.62);
   color: var(--ink);
   font-family: inherit;
-  font-size: 10px;
+  font-size: calc(10px * var(--ui-scale));
   letter-spacing: 0.04em;
   backdrop-filter: blur(6px);
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
-#actions button.big { font-size: 22px; }
+#actions button.big { font-size: calc(22px * var(--ui-scale)); }
 #actions button:active, #actions button.on { background: rgba(244, 201, 93, 0.22); border-color: var(--gold); color: var(--gold); }
-#actions button[data-act="place"] { width: 58px; height: 58px; }
+#actions button[data-act="place"] {
+  width: calc(58px * var(--ui-scale));
+  height: calc(58px * var(--ui-scale));
+}
+
+/* --- gesture navigation (Settings → Game controls → Gestures) --- */
+body.gestures #actions,
+body.gestures #pad { display: none !important; }
+body.gestures #stick { display: none; }
+
+#gestureHelp {
+  position: absolute;
+  top: calc(10px * var(--ui-scale) + env(safe-area-inset-top));
+  right: calc(12px * var(--ui-scale) + env(safe-area-inset-right));
+  width: calc(44px * var(--ui-scale));
+  height: calc(44px * var(--ui-scale));
+  display: none;
+  align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(10, 16, 20, 0.60);
+  color: var(--ink);
+  font-family: inherit; font-size: calc(15px * var(--ui-scale)); font-weight: 700;
+  z-index: 20;
+  touch-action: manipulation;
+}
+body.gestures #gestureHelp { display: flex; }
+
+#gestureGuide {
+  position: absolute; inset: 0; z-index: 90;
+  display: grid; place-items: center;
+  padding: calc(18px * var(--ui-scale));
+  background: rgba(4, 8, 10, 0.58);
+}
+#gestureGuide.hidden { display: none; }
+#gestureGuide .card {
+  width: min(calc(390px * var(--ui-scale)), calc(100vw - 36px * var(--ui-scale)));
+  padding: calc(16px * var(--ui-scale));
+  border: 1px solid var(--line);
+  border-radius: calc(14px * var(--ui-scale));
+  background: rgba(9, 15, 18, 0.94);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+}
+#gestureGuide h2 { margin: 0 0 calc(10px * var(--ui-scale)); color: var(--green); font-size: calc(11px * var(--ui-scale)); letter-spacing: 0.16em; }
+#gestureGuide .grow { display: flex; justify-content: space-between; gap: calc(16px * var(--ui-scale)); padding: calc(5px * var(--ui-scale)) 0; border-bottom: 1px solid rgba(255, 255, 255, 0.07); font-size: calc(11px * var(--ui-scale)); }
+#gestureGuide .grow b { color: var(--ink); font-weight: 600; }
+#gestureGuide .grow span { color: var(--muted); text-align: right; }
+#gestureGuide button {
+  width: 100%; min-height: calc(44px * var(--ui-scale)); margin-top: calc(14px * var(--ui-scale));
+  border: 1px solid var(--green); border-radius: calc(9px * var(--ui-scale));
+  background: rgba(143, 209, 79, 0.14); color: var(--green);
+  font-family: inherit; font-size: calc(10px * var(--ui-scale)); letter-spacing: 0.12em;
+}
+
+#gestureHold {
+  position: fixed;
+  width: calc(64px * var(--ui-scale));
+  height: calc(64px * var(--ui-scale));
+  margin: calc(-32px * var(--ui-scale)) 0 0 calc(-32px * var(--ui-scale));
+  border-radius: 50%; display: none; z-index: 30; pointer-events: none;
+  background: conic-gradient(var(--gold) calc(var(--p, 0) * 1turn), rgba(255,255,255,0.14) 0);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.25);
+}
+#gestureHold::after {
+  content: ''; position: absolute; inset: calc(6px * var(--ui-scale)); border-radius: 50%;
+  background: rgba(8, 14, 17, 0.78);
+}
+#gestureRipple {
+  position: fixed;
+  width: calc(44px * var(--ui-scale));
+  height: calc(44px * var(--ui-scale));
+  margin: calc(-22px * var(--ui-scale)) 0 0 calc(-22px * var(--ui-scale));
+  border-radius: 50%; display: none; z-index: 29; pointer-events: none;
+  border: 2px solid var(--gold);
+  transform: translate(-50%, -50%);
+  animation: gestureRipple 0.36s ease-out forwards;
+}
+@keyframes gestureRipple {
+  from { opacity: 0.95; transform: translate(-50%, -50%) scale(0.35); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(1.8); }
+}
+
 
 /* ---------------------------------------------------------------- modal -- */
 .modal {
@@ -889,6 +981,25 @@ body.panel-open #quests, body.panel-open #minimap { opacity: 0; pointer-events: 
 </head>
 <body>
 
+  <button id="gestureHelp" aria-label="Show gesture guide">?</button>
+  <div id="gestureGuide" class="hidden" role="dialog" aria-label="Gesture navigation guide">
+    <div class="card">
+      <h2>GESTURE NAVIGATION</h2>
+      <div class="grow"><b>Left drag</b><span>Move · floating stick</span></div>
+      <div class="grow"><b>Right drag</b><span>Look · direct camera</span></div>
+      <div class="grow"><b>Tap</b><span>Place a block</span></div>
+      <div class="grow"><b>Double tap</b><span>Jump</span></div>
+      <div class="grow"><b>Triple tap</b><span>Talk / use</span></div>
+      <div class="grow"><b>Touch and hold</b><span>Break a block</span></div>
+      <div class="grow"><b>Two-finger tap</b><span>Attack · PvP</span></div>
+      <div class="grow"><b>Two-finger swipe</b><span>Left/right: block · up/down: fly</span></div>
+      <div class="grow"><b>Pinch</b><span>Zoom the world view</span></div>
+      <button id="gestureGuideClose">GOT IT</button>
+    </div>
+  </div>
+  <div id="gestureHold" aria-hidden="true"></div>
+  <div id="gestureRipple" aria-hidden="true"></div>
+
   <div id="glLost" class="hidden" role="alert">
     <div>
       <b>GRAPHICS CONTEXT LOST</b>
@@ -1372,6 +1483,9 @@ const canvas = $('gl');
 const GAME_DENSITY = Math.max(1, Math.min(3,
   Number(new URLSearchParams(location.search).get('density')) || 1));
 const renderDpr = () => Math.min(3, Math.max(1, 3 / GAME_DENSITY));
+// Touch chrome is sized in points, not virtual pixels. At density 3 a 44 pt
+// target is 132 CSS px; this keeps the stick, hotbar and guide at HIG sizes.
+const UI_SCALE = GAME_DENSITY;
 // **World zoom is the camera FOV, not the WebView scale.** Zooming the page
 // changes the HUD only; the canvas is always the panel. A wider vertical field
 // of view puts more blocks on the same panel without touching the backing store.
@@ -1423,8 +1537,15 @@ const satsEl = $('sats');
 
 const IS_TOUCH = matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window);
 const NATIVE = new URLSearchParams(location.search).get('native') === '1';
+const GESTURE_NAV = new URLSearchParams(location.search).get('gestures') === '1';
 if (NATIVE) { document.body.classList.add('native'); minimapEl.classList.add('show'); }
+if (GESTURE_NAV) document.body.classList.add('gestures');
 if (IS_TOUCH) document.body.classList.add('touch');
+const gestureHelpEl = $('gestureHelp');
+const gestureGuideEl = $('gestureGuide');
+const gestureGuideCloseEl = $('gestureGuideClose');
+const gestureHoldEl = $('gestureHold');
+const gestureRippleEl = $('gestureRipple');
 
 // ------------------------------------------------------------------- maths --
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -2562,6 +2683,328 @@ let dragLook = false, dragId = null, dragX = 0, dragY = 0, dragTotal = 0;
 const joy = { id: null, x: 0, y: 0, cx: 0, cy: 0 };
 const knob = $('knob'), stick = $('stick');
 
+// ------------------------------------------------------- gesture navigation --
+// **Alternative to the game pad, not a replacement for the page's touch pad.**
+// The mode is explicit (`?gestures=1`); the native overlay is hidden so the
+// canvas receives the touches. The map follows the Apple HIG: left half movement
+// with a thumbstick that appears where the thumb lands, right half direct camera,
+// pinch for zoom, tap/placement, touch-and-hold for the powered-up action, and
+// two-finger gestures for the secondary actions. Every action is also reachable
+// from the gamepad mode and the page's hotbar, so a custom gesture is never the
+// only way to play.
+const gesture = {
+  pointers: new Map(), one: null, two: null,
+  holdTimer: 0, holdFrame: 0, holdActive: false, holdPoint: null,
+  tapTimer: 0, tapCount: 0, tapAt: 0, tapPoint: null,
+  lastGesture: '',
+  stats: { moves: 0, looks: 0, taps: 0, doubles: 0, triples: 0, holds: 0,
+           twoTaps: 0, swipes: 0, pinches: 0, fly: 0, guide: 0,
+           lastTapGap: 0, lastTapCount: 0, tapTrace: [],
+           twoStarts: 0, twoEnds: 0, lastTwoElapsed: 0, lastTwoMoved: false }
+};
+function gestureNow() { return performance.now(); }
+function gestureClearHold() {
+  clearTimeout(gesture.holdTimer);
+  gesture.holdTimer = 0;
+  cancelAnimationFrame(gesture.holdFrame);
+  gesture.holdFrame = 0;
+  gesture.holdActive = false;
+  gesture.holdPoint = null;
+  breakHeld = false;
+  if (gestureHoldEl) gestureHoldEl.style.display = 'none';
+}
+function gestureReleaseOne() {
+  joy.id = null; joy.x = joy.y = 0;
+  stick.style.left = ''; stick.style.top = ''; stick.style.bottom = '';
+  if (GESTURE_NAV) stick.style.display = 'none';
+  knob.style.transform = 'translate(0px,0px)';
+  dragId = null;
+}
+function gestureCancelTap() {
+  clearTimeout(gesture.tapTimer);
+  gesture.tapTimer = 0;
+  gesture.tapCount = 0;
+  gesture.tapPoint = null;
+}
+function gestureRipple(x, y) {
+  if (!gestureRippleEl) return;
+  gestureRippleEl.style.left = x + 'px';
+  gestureRippleEl.style.top = y + 'px';
+  gestureRippleEl.style.display = 'none';
+  void gestureRippleEl.offsetWidth;
+  gestureRippleEl.style.display = 'block';
+  setTimeout(() => { if (gestureRippleEl) gestureRippleEl.style.display = 'none'; }, 380);
+}
+function gestureGuide(force) {
+  if (!GESTURE_NAV || !gestureGuideEl) return;
+  if (!force) {
+    try { if (localStorage.getItem('nc_gesture_guide') === '1') return; } catch (e) {}
+  }
+  gestureGuideEl.classList.remove('hidden');
+  gesture.stats.guide++;
+}
+function gestureHideGuide() {
+  if (!gestureGuideEl) return;
+  gestureGuideEl.classList.add('hidden');
+  try { localStorage.setItem('nc_gesture_guide', '1'); } catch (e) {}
+}
+function gestureHoldStart(x, y) {
+  gesture.holdPoint = { x, y };
+  gesture.holdActive = false;
+  if (gestureHoldEl) {
+    gestureHoldEl.style.left = x + 'px';
+    gestureHoldEl.style.top = y + 'px';
+    gestureHoldEl.style.setProperty('--p', '0');
+    gestureHoldEl.style.display = 'block';
+  }
+  const started = gestureNow();
+  const tick = () => {
+    const p = Math.min(1, (gestureNow() - started) / 460);
+    if (gestureHoldEl) gestureHoldEl.style.setProperty('--p', String(p));
+    if (p < 1) gesture.holdFrame = requestAnimationFrame(tick);
+  };
+  gesture.holdFrame = requestAnimationFrame(tick);
+  gesture.holdTimer = setTimeout(() => {
+    if (gesture.holdActive) return;
+    gesture.holdActive = true;
+    breakHeld = true;
+    gesture.stats.holds++;
+    gesture.lastGesture = 'hold';
+    beep(170, 0.05, 'square', 0.02);
+    // Keep the aim steady while mining.
+    dragId = null;
+  }, 460);
+}
+function gestureTapCommit() {
+  const point = gesture.tapPoint;
+  const count = gesture.tapCount;
+  gesture.tapTimer = 0;
+  gesture.tapCount = 0;
+  gesture.tapPoint = null;
+  if (!point) return;
+  if (count === 1) {
+    gesture.stats.taps++;
+    gesture.lastGesture = 'place';
+    placeHeld = true;
+    setTimeout(() => { placeHeld = false; }, 160);
+    gestureRipple(point.x, point.y);
+    beep(520, 0.04, 'square', 0.015);
+  } else if (count === 2) {
+    gesture.stats.doubles++;
+    gesture.lastGesture = 'jump';
+    jumpHeld = true;
+    setTimeout(() => { jumpHeld = false; }, 120);
+    gestureRipple(point.x, point.y);
+    beep(660, 0.05, 'triangle', 0.02);
+  } else {
+    gesture.stats.triples++;
+    gesture.lastGesture = 'interact';
+    if (window.nautilusInput) window.nautilusInput.interact();
+    gestureRipple(point.x, point.y);
+  }
+}
+function gestureTap(x, y) {
+  const now = gestureNow();
+  gesture.stats.lastTapGap = Math.round(now - gesture.tapAt);
+  if (now - gesture.tapAt > 330) gesture.tapCount = 0;
+  gesture.tapAt = now;
+  gesture.tapCount = Math.min(3, gesture.tapCount + 1);
+  gesture.stats.lastTapCount = gesture.tapCount;
+  gesture.stats.tapTrace.push([Math.round(now), gesture.tapCount]);
+  if (gesture.stats.tapTrace.length > 12) gesture.stats.tapTrace.shift();
+  gesture.tapPoint = { x, y };
+  clearTimeout(gesture.tapTimer);
+  gesture.tapTimer = setTimeout(gestureTapCommit, 300);
+}
+function gestureTwoStart() {
+  const pts = [...gesture.pointers.values()];
+  if (pts.length < 2) return;
+  gesture.stats.twoStarts++;
+  const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+  gesture.two = {
+    startDist: Math.max(1, d), startFov: viewFov,
+    startX: (pts[0].x + pts[1].x) / 2, startY: (pts[0].y + pts[1].y) / 2,
+    startPts: pts.map((p) => ({ x: p.x, y: p.y })),
+    at: gestureNow(), moved: false, pinched: false, dx: 0, dy: 0
+  };
+  gestureCancelTap();
+  gestureClearHold();
+  gestureReleaseOne();
+}
+function gestureTwoMove() {
+  if (!gesture.two) return;
+  const pts = [...gesture.pointers.values()];
+  if (pts.length < 2) return;
+  const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+  const mx = (pts[0].x + pts[1].x) / 2;
+  const my = (pts[0].y + pts[1].y) / 2;
+  const dx = mx - gesture.two.startX;
+  const dy = my - gesture.two.startY;
+  // **Pinch is relative motion, not distance alone.** Two fingers swiping
+  // together change the centroid but not the separation; only a real pinch
+  // changes the vector between them. This keeps a two-finger swipe from
+  // being mistaken for a zoom, including when the browser reports the two
+  // pointer moves one at a time.
+  const startPts = gesture.two.startPts;
+  const relative = Math.hypot(
+    (pts[1].x - pts[0].x) - (startPts[1].x - startPts[0].x),
+    (pts[1].y - pts[0].y) - (startPts[1].y - startPts[0].y)
+  );
+  const moved1 = pts[0].x !== startPts[0].x || pts[0].y !== startPts[0].y;
+  const moved2 = pts[1].x !== startPts[1].x || pts[1].y !== startPts[1].y;
+  if (gesture.two.pinched
+      || (moved1 && moved2 && relative > 14
+          && Math.abs(d / gesture.two.startDist - 1) > 0.035)) {
+    gesture.two.pinched = true;
+    // Pinch in = wider view (zoom out); pinch out = tighter view (zoom in).
+    const fov = clamp(gesture.two.startFov * (gesture.two.startDist / Math.max(1, d)), 60, 110);
+    if (Math.abs(fov - viewFov) > 0.2) {
+      setViewFov(fov);
+      gesture.stats.pinches++;
+      gesture.lastGesture = 'pinch';
+    }
+  }
+  if (Math.hypot(dx, dy) > 12) gesture.two.moved = true;
+  gesture.two.dx = dx;
+  gesture.two.dy = dy;
+}
+function gestureTwoEnd() {
+  const two = gesture.two;
+  gesture.two = null;
+  if (!two) return;
+  const elapsed = gestureNow() - two.at;
+  gesture.stats.twoEnds++;
+  gesture.stats.lastTwoElapsed = Math.round(elapsed);
+  gesture.stats.lastTwoMoved = two.moved;
+  if (two.pinched) {
+    toast(`VIEW ${Math.round(viewFov)}°`, 900);
+    beep(440, 0.05, 'sine', 0.015);
+    return;
+  }
+  if (elapsed < 2500 && !two.moved) {
+    gesture.stats.twoTaps++;
+    gesture.lastGesture = 'attack';
+    if (window.nautilusInput) window.nautilusInput.attack();
+    gestureRipple(two.startX, two.startY);
+    beep(150, 0.06, 'sawtooth', 0.02);
+    return;
+  }
+  if (Math.abs(two.dx) > 58 && Math.abs(two.dy) < 46) {
+    const direction = two.dx < 0 ? 1 : -1;
+    selectSlot((selected + direction + HOTBAR.length) % HOTBAR.length);
+    gesture.stats.swipes++;
+    gesture.lastGesture = 'hotbar';
+    toast(`BLOCK ${selected + 1} / ${HOTBAR.length}`, 900);
+    return;
+  }
+  if (Math.abs(two.dy) > 58 && Math.abs(two.dx) < 46) {
+    player.fly = two.dy < 0;
+    player.vy = 0;
+    gesture.stats.fly++;
+    gesture.lastGesture = 'fly';
+    toast(player.fly ? 'FLY ON · two-finger swipe down to land' : 'FLY OFF', 1200);
+  }
+}
+function gesturePointerDown(e) {
+  if (!GESTURE_NAV) return;
+  e.preventDefault();
+  if (gesture.pointers.size >= 2) return;
+  gesture.pointers.set(e.pointerId, {
+    x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY, at: gestureNow()
+  });
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+  if (gesture.pointers.size === 1) {
+    const left = e.clientX < innerWidth * 0.44;
+    gesture.one = {
+      id: e.pointerId, role: left ? 'move' : 'look',
+      x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY,
+      moved: false, at: gestureNow()
+    };
+    if (left) {
+      joy.id = e.pointerId; joy.cx = e.clientX; joy.cy = e.clientY;
+      joy.x = joy.y = 0;
+      stick.style.left = (e.clientX - 62 * UI_SCALE) + 'px';
+      stick.style.top = (e.clientY - 62 * UI_SCALE) + 'px';
+      stick.style.bottom = 'auto';
+      stick.style.display = 'block';
+      knob.style.transform = 'translate(0px,0px)';
+      gesture.stats.moves++;
+    } else {
+      dragId = e.pointerId; dragX = e.clientX; dragY = e.clientY;
+      gesture.stats.looks++;
+      gestureHoldStart(e.clientX, e.clientY);
+    }
+  } else if (gesture.pointers.size === 2) {
+    gesture.one = null;
+    gestureTwoStart();
+  }
+}
+function gesturePointerMove(e) {
+  if (!GESTURE_NAV || !gesture.pointers.has(e.pointerId)) return;
+  e.preventDefault();
+  const p = gesture.pointers.get(e.pointerId);
+  p.x = e.clientX; p.y = e.clientY;
+  if (gesture.two) { gestureTwoMove(); return; }
+  const one = gesture.one;
+  if (!one || one.id !== e.pointerId) return;
+  const dx = e.clientX - one.x;
+  const dy = e.clientY - one.y;
+  if (Math.hypot(e.clientX - one.startX, e.clientY - one.startY) > 8) {
+    one.moved = true;
+    if (one.role === 'look') {
+      gestureCancelTap();
+      if (!gesture.holdActive) gestureClearHold();
+    }
+  }
+  if (one.role === 'move') {
+    const r = Math.hypot(e.clientX - joy.cx, e.clientY - joy.cy);
+    const max = 52 * UI_SCALE;
+    const cl = r > max ? max / r : 1;
+    joy.x = (e.clientX - joy.cx) * cl / max;
+    joy.y = (e.clientY - joy.cy) * cl / max;
+    knob.style.transform = `translate(${(e.clientX - joy.cx) * cl}px,${(e.clientY - joy.cy) * cl}px)`;
+  } else if (!gesture.holdActive) {
+    player.yaw -= dx * 0.0045;
+    player.pitch = clamp(player.pitch - dy * 0.0045, -1.45, 1.45);
+    one.x = e.clientX;
+    one.y = e.clientY;
+  }
+}
+function gesturePointerUp(e) {
+  if (!GESTURE_NAV || !gesture.pointers.has(e.pointerId)) return;
+  e.preventDefault();
+  const p = gesture.pointers.get(e.pointerId);
+  gesture.pointers.delete(e.pointerId);
+  if (gesture.two) {
+    if (gesture.pointers.size === 0) gestureTwoEnd();
+    return;
+  }
+  const one = gesture.one;
+  if (one && one.id === e.pointerId) {
+    const held = gesture.holdActive;
+    gestureClearHold();
+    if (!held && !one.moved && gesture.pointers.size === 0) {
+      gestureTap(p.startX, p.startY);
+    }
+    gestureReleaseOne();
+    gesture.one = null;
+  }
+}
+function gesturePointerCancel(e) {
+  if (!GESTURE_NAV || !gesture.pointers.has(e.pointerId)) return;
+  gesture.pointers.delete(e.pointerId);
+  gestureClearHold();
+  gestureCancelTap();
+  if (gesture.pointers.size === 0) {
+    gesture.one = null;
+    gesture.two = null;
+    gestureReleaseOne();
+  }
+}
+if (gestureHelpEl) gestureHelpEl.addEventListener('click', () => gestureGuide(true));
+if (gestureGuideCloseEl) gestureGuideCloseEl.addEventListener('click', gestureHideGuide);
+
+
 function lockPointer() {
   try {
     const p = canvas.requestPointerLock?.();
@@ -2638,12 +3081,13 @@ canvas.addEventListener('wheel', (e) => {
 
 // touch: left 44% is a floating joystick, the rest looks
 canvas.addEventListener('pointerdown', (e) => {
+  if (GESTURE_NAV) { gesturePointerDown(e); return; }
   if (e.pointerType === 'mouse') return;
   e.preventDefault();
   if (e.clientX < innerWidth * 0.44 && joy.id === null) {
     joy.id = e.pointerId; joy.cx = e.clientX; joy.cy = e.clientY; joy.x = 0; joy.y = 0;
-    stick.style.left = (e.clientX - 62) + 'px';
-    stick.style.top = (e.clientY - 62) + 'px';
+    stick.style.left = (e.clientX - 62 * UI_SCALE) + 'px';
+    stick.style.top = (e.clientY - 62 * UI_SCALE) + 'px';
     stick.style.bottom = 'auto';
     knob.style.transform = 'translate(0px,0px)';
     canvas.setPointerCapture(e.pointerId);
@@ -2653,11 +3097,12 @@ canvas.addEventListener('pointerdown', (e) => {
   }
 }, { passive: false });
 canvas.addEventListener('pointermove', (e) => {
+  if (GESTURE_NAV) { gesturePointerMove(e); return; }
   if (e.pointerType === 'mouse') return;
   e.preventDefault();
   if (e.pointerId === joy.id) {
     const dx = e.clientX - joy.cx, dy = e.clientY - joy.cy;
-    const r = Math.hypot(dx, dy), max = 52;
+    const r = Math.hypot(dx, dy), max = 52 * UI_SCALE;
     const cl = r > max ? max / r : 1;
     joy.x = (dx * cl) / max; joy.y = (dy * cl) / max;
     knob.style.transform = `translate(${dx * cl}px,${dy * cl}px)`;
@@ -2677,8 +3122,14 @@ function endPointer(e) {
   }
   if (e.pointerId === dragId) dragId = null;
 }
-canvas.addEventListener('pointerup', endPointer);
-canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('pointerup', (e) => {
+  if (GESTURE_NAV) { gesturePointerUp(e); return; }
+  endPointer(e);
+});
+canvas.addEventListener('pointercancel', (e) => {
+  if (GESTURE_NAV) { gesturePointerCancel(e); return; }
+  endPointer(e);
+});
 
 // action buttons
 document.querySelectorAll('#actions button').forEach((b) => {
@@ -3984,6 +4435,7 @@ function renderInfo() {
   return {
     density: GAME_DENSITY,
     fov: viewFov,
+    gestures: GESTURE_NAV,
     fog: [FOG_NEAR, FOG_FAR],
     dpr,
     css: [innerWidth, innerHeight],
@@ -4533,6 +4985,7 @@ function startGame() {
     started = true;
     showHint(IS_TOUCH ? 'Left thumb moves · right thumb looks' : 'Click to capture the mouse');
   }
+  if (GESTURE_NAV) setTimeout(() => gestureGuide(false), 800);
   NET.name = sanitizeName(playerNameEl ? playerNameEl.value : NET.name);
   try { if (store) store.setItem('nc_name', NET.name); } catch (e) {}
   connectNet();
@@ -5267,6 +5720,8 @@ async function runGameAction(action, args) {
       .sort((a, b) => a.distance - b.distance).slice(0, 8),
     players: [...NET.players.keys()],
     render: renderInfo(),
+    gestures: GESTURE_NAV ? { ...gesture.stats, fov: viewFov,
+                              fly: player.fly, selected } : null,
     at: Date.now()
   }, extra || {});
   const name = String(action || 'status').toLowerCase();
@@ -5276,6 +5731,12 @@ async function runGameAction(action, args) {
   if (name === 'view') {
     const fov = setViewFov(opts.fov);
     return snap({ fov });
+  }
+
+  if (name === 'guide') {
+    if (opts.show === '0' || opts.show === 'false') gestureHideGuide();
+    else gestureGuide(true);
+    return snap({ guide: !gestureGuideEl || !gestureGuideEl.classList.contains('hidden') });
   }
 
   if (name === 'walk') {
@@ -5875,6 +6336,19 @@ window.__nc = {
           info: () => ({ fov: viewFov, fog: [FOG_NEAR, FOG_FAR],
                          tanHalf: Math.tan(viewFov * Math.PI / 360),
                          aspect: canvas.width / Math.max(1, canvas.height) }) },
+  gestures: {
+    get enabled() { return GESTURE_NAV; },
+    status: () => ({ ...gesture.stats, fov: viewFov, fly: player.fly,
+                     selected, pointers: gesture.pointers.size,
+                     last: gesture.lastGesture }),
+    simulate: (count = 1) => {
+      gesture.tapCount = Math.max(1, Math.min(3, Number(count) || 1));
+      gesture.tapPoint = { x: innerWidth * 0.7, y: innerHeight * 0.5 };
+      gestureTapCommit();
+      return { ...gesture.stats, fov: viewFov, fly: player.fly, selected };
+    },
+    guide: (show) => { if (show) gestureGuide(true); else gestureHideGuide(); }
+  },
   get orders() { return state.orders.map((o) => ({ ...o })); },
   get focusCounts() { return { ...state.focusCounts }; },
   intent(text) { return intentTool(text); },
