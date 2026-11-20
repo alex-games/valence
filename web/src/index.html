@@ -6,9 +6,122 @@
 <meta name="theme-color" content="#8ec5e8">
 <meta name="description" content="Nautilus Craft — a beginner voxel level modelled on Torrance, California, served by nginx from the Minecraft VM.">
 <title>Nautilus Craft — Torrance Beginner Level</title>
-<style>/*__CSS__*/</style>
+<style>/*__CSS__*/
+.panel.hidden { display: none; }
+
+/* --- native app: no text HUD, only the world graphic, minimap and controller --- */
+body.native #topbar,
+body.native #topright,
+body.native #quests,
+body.native #chat,
+body.native #hint,
+body.native #toast,
+body.native #pad,
+body.native #voice,
+body.native #talk,
+body.native #farm,
+body.native #labels { display: none !important; }
+body.native #minimap {
+  display: block;
+  top: calc(10px + env(safe-area-inset-top));
+  left: calc(12px + env(safe-area-inset-left));
+  right: auto;
+  bottom: auto;
+}
+body.native #minimap span { display: none; }
+
+body.panel-open #quests, body.panel-open #minimap { opacity: 0; pointer-events: none; }
+#quests, #minimap { transition: opacity 0.15s ease; }
+
+/* --- epoch campaign: top-middle dropdown, not a right-side panel --- */
+#topcenter {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  z-index: 7;
+}
+.epoch-trigger {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--gold);
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(8px);
+}
+.epoch-trigger b { color: var(--ink); font-weight: 500; letter-spacing: 0.04em; }
+.epoch-trigger em { font-style: normal; color: var(--muted); font-size: 11px; }
+.epoch-trigger[aria-expanded="true"] { border-color: var(--green); color: var(--green); }
+.panel h2 .x {
+  min-width: 44px;
+  min-height: 44px;
+  margin: -8px -8px -8px 0;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  border-radius: 8px;
+}
+.panel-dismiss {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+.panel-dismiss:hover, .panel-dismiss:focus-visible { border-color: var(--green); color: var(--green); }
+#campaign.panel {
+  top: calc(62px + env(safe-area-inset-top));
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(78vh, 620px);
+}
+@media (max-width: 740px) {
+  #topcenter { top: calc(58px + env(safe-area-inset-top)); }
+  #campaign.panel { top: calc(110px + env(safe-area-inset-top)); }
+}
+
+
+/* --- graphics context recovery --- */
+#glLost { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center;
+  padding: 24px; background: rgba(6, 10, 14, 0.94); color: #fff; text-align: center; }
+#glLost.hidden { display: none; }
+#glLost b { display: block; color: var(--gold); font-size: 12px; letter-spacing: 0.14em; margin-bottom: 8px; }
+#glLost p { max-width: 360px; margin: 0 auto 16px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+#glLost button { min-height: 44px; padding: 0 18px; border: 1px solid var(--green);
+  border-radius: 8px; background: rgba(143, 209, 79, 0.14); color: var(--green);
+  font-family: inherit; font-size: 10px; letter-spacing: 0.12em; cursor: pointer; }
+
+</style>
 </head>
 <body>
+
+  <div id="glLost" class="hidden" role="alert">
+    <div>
+      <b>GRAPHICS CONTEXT LOST</b>
+      <p>The phone reclaimed the WebGL context. Restore the view; your game save is kept.</p>
+      <button id="glRestore">RESTORE GRAPHICS</button>
+    </div>
+  </div>
+
 <div id="game">
   <canvas id="gl" aria-label="Torrance voxel world"></canvas>
   <div id="labels"></div>
@@ -29,6 +142,13 @@
         <span>WALLET <b id="wallet">—</b></span>
         <span id="net">OFFLINE · SOLO</span>
       </div>
+    </div>
+    <div id="topcenter">
+      <button id="btnCampaignMenu" class="epoch-trigger" aria-haspopup="true"
+              aria-expanded="false" aria-controls="campaign"
+              aria-label="Epoch campaign menu">
+        <span>EPOCH</span><b id="epochMenuValue">—</b><em>▾</em>
+      </button>
     </div>
   </header>
 
@@ -67,6 +187,14 @@
     <button id="dialogueNext">Next</button>
   </div>
 
+
+  <aside id="status" class="panel hidden" aria-label="Game status">
+    <h2><span>GAME STATUS</span><button class="x" data-close="status" aria-label="Close">✕</button></h2>
+    <p class="goal" id="statusLine">—</p>
+    <div id="statusList" class="list"></div>
+    <button class="panel-dismiss" data-close="status">DISMISS</button>
+  </aside>
+
   <aside id="citizens" class="panel hidden" aria-label="Citizens and AI governor">
     <h2><span>CITIZENS · AI GOVERNOR</span><button class="x" data-close="citizens" aria-label="Close">✕</button></h2>
     <p class="goal" id="citGoal">Goal: growth</p>
@@ -94,18 +222,21 @@
       <button id="citMap">Map shards</button>
     </div>
     <p class="why" id="citWhy"></p>
+    <button class="panel-dismiss" data-close="citizens">DISMISS</button>
   </aside>
 
   <aside id="market" class="panel hidden" aria-label="Regional market">
     <h2><span>REGIONAL MARKET</span><button class="x" data-close="market" aria-label="Close">✕</button></h2>
     <p class="goal">Game credits · 3% broker · 2% sales tax · no BTC moves here</p>
     <div id="mktList" class="list"></div>
+    <button class="panel-dismiss" data-close="market">DISMISS</button>
   </aside>
 
   <aside id="diplomacy" class="panel hidden" aria-label="AI relations">
     <h2><span>AI RELATIONS</span><button class="x" data-close="diplomacy" aria-label="Close">✕</button></h2>
     <p class="goal">Contact in any shard · 7 game days to cool aggression</p>
     <div id="dipList" class="list"></div>
+    <button class="panel-dismiss" data-close="diplomacy">DISMISS</button>
   </aside>
 
   <aside id="campaign" class="panel hidden" aria-label="Epoch campaign and contracts">
@@ -116,6 +247,7 @@
     <p class="goal" id="contractRep">Reputation 0 · 3 active max</p>
     <div id="contractList" class="list"></div>
     <p class="why" id="merLine">MER · no trades yet</p>
+    <button class="panel-dismiss" data-close="campaign">DISMISS</button>
   </aside>
 
   <div id="pad" aria-label="Virtual controller">
@@ -123,7 +255,6 @@
     <button data-pad="citizens">CITIZENS</button>
     <button data-pad="market">MARKET</button>
     <button data-pad="diplomacy">RELATIONS</button>
-    <button data-pad="campaign">CAMPAIGN</button>
     <button data-pad="map">MAP</button>
     <button data-pad="claim">CLAIM</button>
     <button data-pad="talk">TALK</button>

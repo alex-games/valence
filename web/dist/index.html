@@ -3,6 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<script>
+// **The viewport is the density transform, not a SwiftUI layer scale.** A WKWebView
+// that is scaled with a layer transform can run while its layer draws blank; WebKit
+// applies `initial-scale` natively and lays the page out in the virtual points.
+(function () {
+  var density = Number(new URLSearchParams(location.search).get('density')) || 1;
+  if (density <= 1) return;
+  var meta = document.querySelector('meta[name="viewport"]');
+  if (meta) meta.setAttribute('content',
+    'width=device-width, initial-scale=' + (1 / density) +
+    ', maximum-scale=1, user-scalable=no, viewport-fit=cover');
+})();
+</script>
 <meta name="theme-color" content="#8ec5e8">
 <meta name="description" content="Nautilus Craft — a beginner voxel level modelled on Torrance, California, served by nginx from the Minecraft VM.">
 <title>Nautilus Craft — Torrance Beginner Level</title>
@@ -768,9 +781,122 @@ button.btn:active { transform: translateY(1px); }
   #pad { grid-template-columns: 1fr; bottom: calc(190px + env(safe-area-inset-bottom)); }
   #pad button { min-width: 78px; font-size: 8px; }
 }
+
+.panel.hidden { display: none; }
+
+/* --- native app: no text HUD, only the world graphic, minimap and controller --- */
+body.native #topbar,
+body.native #topright,
+body.native #quests,
+body.native #chat,
+body.native #hint,
+body.native #toast,
+body.native #pad,
+body.native #voice,
+body.native #talk,
+body.native #farm,
+body.native #labels { display: none !important; }
+body.native #minimap {
+  display: block;
+  top: calc(10px + env(safe-area-inset-top));
+  left: calc(12px + env(safe-area-inset-left));
+  right: auto;
+  bottom: auto;
+}
+body.native #minimap span { display: none; }
+
+body.panel-open #quests, body.panel-open #minimap { opacity: 0; pointer-events: none; }
+#quests, #minimap { transition: opacity 0.15s ease; }
+
+/* --- epoch campaign: top-middle dropdown, not a right-side panel --- */
+#topcenter {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  z-index: 7;
+}
+.epoch-trigger {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--gold);
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(8px);
+}
+.epoch-trigger b { color: var(--ink); font-weight: 500; letter-spacing: 0.04em; }
+.epoch-trigger em { font-style: normal; color: var(--muted); font-size: 11px; }
+.epoch-trigger[aria-expanded="true"] { border-color: var(--green); color: var(--green); }
+.panel h2 .x {
+  min-width: 44px;
+  min-height: 44px;
+  margin: -8px -8px -8px 0;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  border-radius: 8px;
+}
+.panel-dismiss {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+.panel-dismiss:hover, .panel-dismiss:focus-visible { border-color: var(--green); color: var(--green); }
+#campaign.panel {
+  top: calc(62px + env(safe-area-inset-top));
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(78vh, 620px);
+}
+@media (max-width: 740px) {
+  #topcenter { top: calc(58px + env(safe-area-inset-top)); }
+  #campaign.panel { top: calc(110px + env(safe-area-inset-top)); }
+}
+
+
+/* --- graphics context recovery --- */
+#glLost { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center;
+  padding: 24px; background: rgba(6, 10, 14, 0.94); color: #fff; text-align: center; }
+#glLost.hidden { display: none; }
+#glLost b { display: block; color: var(--gold); font-size: 12px; letter-spacing: 0.14em; margin-bottom: 8px; }
+#glLost p { max-width: 360px; margin: 0 auto 16px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+#glLost button { min-height: 44px; padding: 0 18px; border: 1px solid var(--green);
+  border-radius: 8px; background: rgba(143, 209, 79, 0.14); color: var(--green);
+  font-family: inherit; font-size: 10px; letter-spacing: 0.12em; cursor: pointer; }
+
 </style>
 </head>
 <body>
+
+  <div id="glLost" class="hidden" role="alert">
+    <div>
+      <b>GRAPHICS CONTEXT LOST</b>
+      <p>The phone reclaimed the WebGL context. Restore the view; your game save is kept.</p>
+      <button id="glRestore">RESTORE GRAPHICS</button>
+    </div>
+  </div>
+
 <div id="game">
   <canvas id="gl" aria-label="Torrance voxel world"></canvas>
   <div id="labels"></div>
@@ -791,6 +917,13 @@ button.btn:active { transform: translateY(1px); }
         <span>WALLET <b id="wallet">—</b></span>
         <span id="net">OFFLINE · SOLO</span>
       </div>
+    </div>
+    <div id="topcenter">
+      <button id="btnCampaignMenu" class="epoch-trigger" aria-haspopup="true"
+              aria-expanded="false" aria-controls="campaign"
+              aria-label="Epoch campaign menu">
+        <span>EPOCH</span><b id="epochMenuValue">—</b><em>▾</em>
+      </button>
     </div>
   </header>
 
@@ -829,6 +962,23 @@ button.btn:active { transform: translateY(1px); }
     <button id="dialogueNext">Next</button>
   </div>
 
+
+  <aside id="status" class="panel hidden" aria-label="Game status">
+    <h2><span>GAME STATUS</span><button class="x" data-close="status" aria-label="Close">✕</button></h2>
+    <p class="goal" id="statusLine">—</p>
+    <div id="statusList" class="list"></div>
+    <button class="panel-dismiss" data-close="status">DISMISS</button>
+  </aside>
+
+
+  <aside id="pvp" class="panel hidden" aria-label="Player versus player">
+    <h2><span>PVP · DUEL</span><button class="x" data-close="pvp" aria-label="Close">✕</button></h2>
+    <p class="goal" id="pvpLine">Disabled · no damage</p>
+    <div id="pvpBoard" class="list"></div>
+    <div class="row"><button id="pvpToggle">ENABLE PVP</button><button id="pvpAuto">AUTO-DUEL OFF</button></div>
+    <button class="panel-dismiss" data-close="pvp">DISMISS</button>
+  </aside>
+
   <aside id="citizens" class="panel hidden" aria-label="Citizens and AI governor">
     <h2><span>CITIZENS · AI GOVERNOR</span><button class="x" data-close="citizens" aria-label="Close">✕</button></h2>
     <p class="goal" id="citGoal">Goal: growth</p>
@@ -856,18 +1006,21 @@ button.btn:active { transform: translateY(1px); }
       <button id="citMap">Map shards</button>
     </div>
     <p class="why" id="citWhy"></p>
+    <button class="panel-dismiss" data-close="citizens">DISMISS</button>
   </aside>
 
   <aside id="market" class="panel hidden" aria-label="Regional market">
     <h2><span>REGIONAL MARKET</span><button class="x" data-close="market" aria-label="Close">✕</button></h2>
     <p class="goal">Game credits · 3% broker · 2% sales tax · no BTC moves here</p>
     <div id="mktList" class="list"></div>
+    <button class="panel-dismiss" data-close="market">DISMISS</button>
   </aside>
 
   <aside id="diplomacy" class="panel hidden" aria-label="AI relations">
     <h2><span>AI RELATIONS</span><button class="x" data-close="diplomacy" aria-label="Close">✕</button></h2>
     <p class="goal">Contact in any shard · 7 game days to cool aggression</p>
     <div id="dipList" class="list"></div>
+    <button class="panel-dismiss" data-close="diplomacy">DISMISS</button>
   </aside>
 
   <aside id="campaign" class="panel hidden" aria-label="Epoch campaign and contracts">
@@ -878,18 +1031,20 @@ button.btn:active { transform: translateY(1px); }
     <p class="goal" id="contractRep">Reputation 0 · 3 active max</p>
     <div id="contractList" class="list"></div>
     <p class="why" id="merLine">MER · no trades yet</p>
+    <button class="panel-dismiss" data-close="campaign">DISMISS</button>
   </aside>
 
   <div id="pad" aria-label="Virtual controller">
     <button data-pad="assist">ASSIST</button>
+    <button data-pad="pvp">PVP</button>
     <button data-pad="citizens">CITIZENS</button>
     <button data-pad="market">MARKET</button>
     <button data-pad="diplomacy">RELATIONS</button>
-    <button data-pad="campaign">CAMPAIGN</button>
     <button data-pad="map">MAP</button>
     <button data-pad="claim">CLAIM</button>
     <button data-pad="talk">TALK</button>
     <button data-pad="epoch">EPOCH</button>
+    <button data-pad="campaign">CAMPAIGN</button>
   </div>
   <div id="voice" class="hidden">LISTENING…</div>
 
@@ -1210,6 +1365,13 @@ window.__INTENTS__={"version": 1, "rule": "One closed vocabulary for the WebView
 // ---------------------------------------------------------------- elements --
 const $ = (id) => document.getElementById(id);
 const canvas = $('gl');
+// **One canvas pixel per physical panel pixel.** The native container lays the
+// WebView out at `density` times the screen points and scales it down; CSS points
+// therefore map to `3 / density` physical pixels. Dividing the canvas dpr by the
+// density keeps the backing store at the panel resolution for 1×, 1.5×, 2× and 3×.
+const GAME_DENSITY = Math.max(1, Math.min(3,
+  Number(new URLSearchParams(location.search).get('density')) || 1));
+const renderDpr = () => Math.min(3, Math.max(1, 3 / GAME_DENSITY));
 const labelsEl = $('labels');
 const coordsEl = $('coords');
 const fpsEl = $('fps');
@@ -1248,6 +1410,8 @@ const photoInput = $('photoInput');
 const satsEl = $('sats');
 
 const IS_TOUCH = matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window);
+const NATIVE = new URLSearchParams(location.search).get('native') === '1';
+if (NATIVE) { document.body.classList.add('native'); minimapEl.classList.add('show'); }
 if (IS_TOUCH) document.body.classList.add('touch');
 
 // ------------------------------------------------------------------- maths --
@@ -2120,6 +2284,12 @@ if (!gl) {
   document.body.innerHTML = '<div style="padding:24px;color:#fff;background:#111;font:14px monospace">WebGL2 is not available in this WebView.</div>';
   return;
 }
+canvas.addEventListener('webglcontextlost', (event) => {
+  event.preventDefault();
+  const panel = $('glLost');
+  if (panel) panel.classList.remove('hidden');
+}, false);
+canvas.addEventListener('webglcontextrestored', () => location.reload(), false);
 
 function compile(type, src) {
   const s = gl.createShader(type);
@@ -2555,6 +2725,8 @@ window.nautilusInput = {
   hotbar(i) { if (Number.isInteger(i) && i >= 0 && i < HOTBAR.length) selectSlot(i); },
   assist(text) { return assistantIntent(String(text || '')); },
   interact() { nativeAction('interact', true); },
+  attack() { return pvpAttack(); },
+  gameAction(action, args) { return runGameAction(action, args); },
   state() {
     return {
       ready: true, mode: window.__NAUTILUS_SERVER__ ? 'server' : 'solo',
@@ -2633,6 +2805,7 @@ const NPCS = (Array.isArray(WORLD.npcs) ? WORLD.npcs : FALLBACK_WORLD.npcs)
     size: Array.isArray(n.size) ? n.size : [1.5, 2.0],
     lines: Array.isArray(n.lines) && n.lines.length ? n.lines : ['Hello, neighbour.'],
     shard: 0, seen: 1, seenCount: 1,
+    aiGoal: null, aiNext: 0, aiWaitUntil: 0, serverAt: 0, aiVisits: Math.floor(Math.random() * 6),
     bob: Math.random() * 6.28
   }));
 const NPC_LABELS = NPCS.map((n) => {
@@ -2922,7 +3095,12 @@ function renderEpoch() {
   const el = $('epoch');
   if (!el) return;
   const label = `${state.epoch} · D${epochDay()} · C${state.epochCohort}`;
-  if (label !== lastEpochLabel) { lastEpochLabel = label; el.textContent = label; }
+  if (label !== lastEpochLabel) {
+    lastEpochLabel = label;
+    el.textContent = label;
+    const menuValue = $('epochMenuValue');
+    if (menuValue) menuValue.textContent = `D${epochDay()}`;
+  }
 }
 let restartArmedUntil = 0;
 function requestRestart() {
@@ -3243,12 +3421,12 @@ const NET = {
   enabled: false, client: null, connected: false, pid: null,
   name: '', color: 0, players: new Map(), scores: new Map(),
   lastPos: 0, retry: 0, anchor: null, revision: 0, chatHideTimer: 0,
-  accounts: new Map(), sides: new Map()
+  accounts: new Map(), sides: new Map(), pvp: new Map()
 };
 const MQTT_BASE = 'wa/v1/c2/torrance';
 const MQTT_FILTERS = [
   'player/+/presence', 'player/+/pos', 'player/+/chat', 'player/+/score',
-  'npc/+/state', 'map/state', 'map/block', 'ledger/anchor', 'ledger/side/+', 'player/+/account'
+  'npc/+/state', 'map/state', 'map/block', 'ledger/anchor', 'ledger/side/+', 'player/+/account', 'pvp/+/state', 'pvp/+/hit', 'pvp/+/downed', 'pvp/feed', 'game/action'
 ];
 const PLAYER_COLORS = ['#f4c95d', '#8fd14f', '#7fc4ff', '#ff8f6b', '#c99cff', '#5be0c8', '#ff7fb0', '#d7dde0'];
 
@@ -3412,6 +3590,7 @@ function applyServerNpc(s) {
   if (!s || !s.id) return;
   const n = NPCS.find((x) => x.id === s.id);
   if (!n) return;
+  n.serverAt = Date.now();
   if (typeof s.x === 'number') { n.tx = s.x; if (Math.abs(n.x - s.x) > 8) n.x = s.x; }
   if (typeof s.y === 'number') { n.ty = s.y; if (Math.abs(n.y - s.y) > 8) n.y = s.y; }
   if (typeof s.z === 'number') { n.tz = s.z; if (Math.abs(n.z - s.z) > 8) n.z = s.z; }
@@ -3586,6 +3765,14 @@ function handleTopicMessage(topic, bytes, retained) {
     }
     return;
   }
+  if (parts[4] === 'game' && parts[5] === 'action' && data) { pvpCommand(data); return; }
+  if (parts[4] === 'pvp') {
+    if (parts[5] === 'feed' && data && data.text) { PVP.feed.push(String(data.text).slice(0, 120)); renderPvP(); }
+    else if (parts[5] && parts[6] === 'downed' && data) { if (pvpOnce(data.at ? 'down:' + parts[5] + ':' + data.at : '')) { if (data.by === NET.pid) { PVP.kills += 1; publishPvPState(); } } renderPvP(); }
+    else if (parts[5] && parts[6] === 'state' && data) { NET.pvp.set(parts[5], data); if (parts[5] === NET.pid) { if (typeof data.health === 'number') PVP.health = data.health; PVP.kills = data.kills | 0; PVP.deaths = data.deaths | 0; } renderPvP(); }
+    else if (parts[5] && parts[6] === 'hit') pvpHandleHit(data);
+    return;
+  }
   if (parts[4] === 'npc' && parts[5] && parts[6] === 'state' && data) {
     applyServerNpc(data);
     return;
@@ -3716,7 +3903,17 @@ function revealChunks() {
 }
 function drawMap() {
   if (!mapBase || !minimapEl.classList.contains('show')) return;
+  const dpr = renderDpr();
+  const cssSide = mapCanvas.clientWidth || 140;
+  const side = Math.max(1, Math.round(cssSide * dpr));
+  if (mapCanvas.width !== side || mapCanvas.height !== side) {
+    mapCanvas.width = side; mapCanvas.height = side;
+  }
   const g = mapCanvas.getContext('2d');
+  // Keep the 192-unit map drawing and scale it to the retina backing store; the
+  // line widths and labels keep their proportions.
+  const scale = mapCanvas.width / 192;
+  g.setTransform(scale, 0, 0, scale, 0, 0);
   g.imageSmoothingEnabled = false;
   g.drawImage(mapBase, 0, 0, 192, 192);
   const px = (player.x / WX) * 192, pz = (player.z / WZ) * 192;
@@ -3757,7 +3954,10 @@ const SUN = norm3([-0.42, 0.34, -0.84]);
 const FOG = [0.93, 0.82, 0.68];
 
 function resize() {
-  const dpr = Math.min(devicePixelRatio || 1, 2);
+  // **1:1 with the panel.** iPhone Retina is 3 device pixels per CSS point;
+  // capping at 2 made the browser upscale a 2× buffer to a 3× panel. Use the
+  // device's real ratio up to 3 so each canvas pixel is one screen pixel.
+  const dpr = renderDpr();
   const w = Math.floor(innerWidth * dpr), h = Math.floor(innerHeight * dpr);
   if (canvas.width !== w || canvas.height !== h) {
     canvas.width = w; canvas.height = h;
@@ -3765,6 +3965,21 @@ function resize() {
   gl.viewport(0, 0, canvas.width, canvas.height);
 }
 addEventListener('resize', resize);
+
+/// The backing-store contract, exposed for the harness and the C2 status.
+function renderInfo() {
+  const dpr = renderDpr();
+  return {
+    density: GAME_DENSITY,
+    dpr,
+    css: [innerWidth, innerHeight],
+    canvas: [canvas.width, canvas.height],
+    ratio: canvas.width / Math.max(1, innerWidth),
+    // 1.0 means one canvas pixel per physical panel pixel.
+    physical: dpr * GAME_DENSITY / 3,
+    minimap: [mapCanvas.width, mapCanvas.height]
+  };
+}
 
 // ------------------------------------------------------------------- render --
 let highlight = null;
@@ -3804,6 +4019,83 @@ function projectPoint(x, y, z) {
   const cy = vp[1] * x + vp[5] * y + vp[9] * z + vp[13];
   return [(cx / w * 0.5 + 0.5) * innerWidth, (-cy / w * 0.5 + 0.5) * innerHeight, w];
 }
+// ---------------------------------------------------------- NPC AI players --
+// Every villager is an AI player with a role-derived goal. When a server is
+// publishing actor state the server wins for 3 s; offline (or when no state
+// arrives) this local planner keeps the cast moving between the landmarks that
+// match their role instead of jittering around a home point. The planner has no
+// model call and no authority over player state: it only picks a waypoint and
+// walks toward it.
+const NPC_AI_SPEED = 0.035;
+function npcGoalFor(n) {
+  const role = (n.role || '').toLowerCase();
+  const byName = (needle) => BUSINESSES.find((b) => b.name.toLowerCase().includes(needle));
+  const byPoi = (needle) => POIS.find((p) => p.name.toLowerCase().includes(needle));
+  if (role.includes('garden') || role.includes('farm')) {
+    return byName('garden') || byPoi('garden') || { name: 'Community Garden', x: 25, z: 25 };
+  }
+  if (role.includes('barista') || role.includes('food') || role.includes('cook')) {
+    return byName('coffee') || byPoi('plaza') || { name: 'The Coffee Bean', x: 68, z: 67 };
+  }
+  if (role.includes('ranger') || role.includes('hedgehog') || role.includes('park')) {
+    return byName('park') || byPoi('park') || { name: 'Lago Seco Park', x: 73, z: 25 };
+  }
+  if (role.includes('sales') || role.includes('dealer') || role.includes('car')) {
+    return byName('dealer') || { name: 'Martin Chevrolet', x: 24, z: 64 };
+  }
+  if (role.includes('vendor') || role.includes('market')) {
+    return byName('market') || byPoi('plaza') || { name: 'Farmers Market', x: 52, z: 35 };
+  }
+  if (role.includes('sentinel') || role.includes('base') || role.includes('ai')) {
+    return byPoi('ai base') || byPoi('san francisco') || { name: 'AI base', x: 48, z: 3 };
+  }
+  return byPoi('plaza') || { name: 'Spawn Plaza', x: 48, z: 36 };
+}
+// A role's workplace is the home stop; the AI player also patrols the shared
+// landmarks so the cast is visibly alive rather than six statues at their posts.
+function npcGoalForVisit(n) {
+  const primary = npcGoalFor(n);
+  const plaza = POIS.find((p) => p.name.toLowerCase().includes('plaza'));
+  const garden = POIS.find((p) => p.name.toLowerCase().includes('garden'));
+  const park = POIS.find((p) => p.name.toLowerCase().includes('park'));
+  const coffee = BUSINESSES.find((b) => b.name.toLowerCase().includes('coffee'));
+  const market = BUSINESSES.find((b) => b.name.toLowerCase().includes('market'));
+  const options = [primary, plaza, garden, park, coffee, market].filter(Boolean);
+  n.aiVisits = (n.aiVisits || 0) + 1;
+  let pick = options[n.aiVisits % options.length];
+  if (Math.hypot(pick.x - n.x, pick.z - n.z) < 2.5) {
+    pick = options.find((o) => Math.hypot(o.x - n.x, o.z - n.z) > 3.0) || primary;
+  }
+  return pick;
+}
+function npcAI(now) {
+  for (const n of NPCS) {
+    if (n.serverAt && now - n.serverAt < 3000) continue;
+    if (now < n.aiWaitUntil) { n.tx = n.x; n.tz = n.z; continue; }
+    const dx = n.tx - n.x, dz = n.tz - n.z;
+    if (n.aiGoal && Math.hypot(dx, dz) < 0.9) {
+      n.aiGoal = null;
+      n.aiWaitUntil = now + 3200 + Math.random() * 5200;
+      continue;
+    }
+    if (!n.aiGoal || now > n.aiNext) {
+      const goal = npcGoalForVisit(n);
+      n.aiGoal = goal.name;
+      n.tx = goal.x;
+      n.tz = goal.z;
+      n.aiNext = now + 18000 + Math.random() * 12000;
+      n.shard = shardAt(goal.x, goal.z);
+    }
+    const len = Math.hypot(n.tx - n.x, n.tz - n.z);
+    if (len > 0.001) {
+      const step = Math.min(NPC_AI_SPEED * 2.4, len);
+      n.x += (n.tx - n.x) / len * step;
+      n.z += (n.tz - n.z) / len * step;
+      n.yaw = Math.atan2(n.tx - n.x, n.tz - n.z);
+    }
+  }
+}
+
 function updateLabels() {
   for (let i = 0; i < POIS.length; i++) {
     const p = POIS[i], el = poiEls[i];
@@ -3949,6 +4241,7 @@ function frame(now) {
   renderEpoch();
   if (started) revealChunks();
 
+  npcAI(now);
   netDrain(handleTopicMessage);
   drainMapQueue();
   for (const [, p] of NET.players) {
@@ -3957,9 +4250,13 @@ function frame(now) {
     p.z += (p.tz - p.z) * 0.22;
   }
   for (const n of NPCS) {
-    n.x += (n.tx - n.x) * 0.18;
+    // Server actor state is smoothed into place. Local AI moves in npcAI()
+    // with a speed limit; the 18% snap would otherwise teleport it.
+    if (n.serverAt && now - n.serverAt < 3000) {
+      n.x += (n.tx - n.x) * 0.18;
+      n.z += (n.tz - n.z) * 0.18;
+    }
     n.y += (n.ty - n.y) * 0.18;
-    n.z += (n.tz - n.z) * 0.18;
   }
   if (NET.connected && started && now - NET.lastPos > 100) {
     NET.lastPos = now;
@@ -4586,7 +4883,7 @@ function renderCampaign() {
 }
 
 // -------------------------------------------------------- voice + panels ---
-const PANELS = ['citizens', 'market', 'diplomacy', 'campaign'];
+const PANELS = ['status', 'pvp', 'citizens', 'market', 'diplomacy', 'campaign'];
 function openPanel(id) {
   for (const p of PANELS) {
     const el = $(p);
@@ -4595,12 +4892,398 @@ function openPanel(id) {
   for (const btn of document.querySelectorAll('#pad button')) {
     btn.classList.toggle('on', btn.dataset.pad === id);
   }
+  if (id === 'status') renderStatus();
+  if (id === 'pvp') renderPvP();
   if (id === 'citizens') renderCitizens();
   if (id === 'market') renderMarket();
   if (id === 'diplomacy') renderDiplomacy();
   if (id === 'campaign') renderCampaign();
+  syncCampaignMenu();
+  updatePanelFocus();
 }
-function closePanels() { for (const p of PANELS) { const el = $(p); if (el) el.classList.add('hidden'); } }
+function closePanels() { for (const p of PANELS) { const el = $(p); if (el) el.classList.add('hidden'); } syncCampaignMenu(); updatePanelFocus(); }
+function updatePanelFocus() {
+  const anyOpen = PANELS.some((p) => { const el = $(p); return el && !el.classList.contains('hidden'); });
+  document.body.classList.toggle('panel-open', anyOpen);
+}
+
+function statusRow(label, value) {
+  const row = document.createElement('div');
+  row.className = 'item';
+  const left = document.createElement('div');
+  const b = document.createElement('b');
+  b.textContent = label;
+  left.appendChild(b);
+  const small = document.createElement('small');
+  small.textContent = String(value);
+  left.appendChild(small);
+  row.appendChild(left);
+  return row;
+}
+function renderStatus() {
+  const list = $('statusList');
+  if (!list) return;
+  const wallet = $('wallet');
+  const net = $('net');
+  list.textContent = '';
+  const rows = [
+    ['Position', `${player.x.toFixed(1)}, ${player.y.toFixed(1)}, ${player.z.toFixed(1)}`],
+    ['Mode', state.fly ? 'flying' : (state.mode || 'walking')],
+    ['Tokens', `${tokenCount()} / ${TOKENS.length}`],
+    ['Sats', String(state.sats)],
+    ['Credits', String(state.credits)],
+    ['Game day', String(gameDay())],
+    ['Epoch', `${state.epoch} · D${epochDay()} · C${state.epochCohort}`],
+    ['Shards', `${countBits(state.shards)} / ${SHARD_COUNT}`],
+    ['Anchor', NET.anchor ? String(NET.anchor.hash || 'pending').slice(0, 16) : '—'],
+    ['Wallet', wallet ? wallet.textContent : '—'],
+    ['Network', net ? net.textContent : (NET.connected ? 'ONLINE' : 'OFFLINE · SOLO')]
+  ];
+  for (const [label, value] of rows) list.appendChild(statusRow(label, value));
+  const qhead = document.createElement('p');
+  qhead.className = 'goal';
+  qhead.style.marginTop = '12px';
+  qhead.textContent = `QUESTS · ${questCount()} / ${QUESTS.length}`;
+  list.appendChild(qhead);
+  for (const q of QUESTS) {
+    const done = qDone(q);
+    list.appendChild(statusRow(q.title, done ? 'done' : 'open'));
+  }
+  const line = $('statusLine');
+  if (line) line.textContent = `${state.epoch} · day ${gameDay()} · ${NET.connected ? 'online' : 'solo'}`;
+}
+
+// --------------------------------------------------------------- PvP duels --
+// LAN-demo PvP: clients publish a retained opt-in state and a hit addressed to a
+// target. The target validates opt-in and range on its own copy of the world.
+// No wallet key, photo or private state is on this path. The server is not the
+// authority for combat yet; a competitive deployment must validate hits there.
+const PVP = { enabled: false, health: 100, maxHealth: 100, kills: 0, deaths: 0,
+  lastHitAt: 0, respawnAt: 0, feed: [], auto: false, autoTimer: 0, recent: [], sent: 0 };
+function publishPvPState() {
+  if (!NET.connected) return;
+  mqttPublish('pvp/' + NET.pid + '/state', {
+    name: NET.name, enabled: PVP.enabled, auto: PVP.auto, health: PVP.health,
+    kills: PVP.kills, deaths: PVP.deaths, at: Date.now()
+  }, 1, true);
+}
+function renderPvP() {
+  const line = $('pvpLine'), board = $('pvpBoard'), toggle = $('pvpToggle');
+  if (line) line.textContent = PVP.enabled
+    ? `PVP ON · ${PVP.health}/${PVP.maxHealth} HP · ${PVP.kills} kills · ${PVP.deaths} deaths` + (PVP.auto ? ' · AUTO' : '')
+    : 'Disabled · no damage';
+  if (toggle) toggle.textContent = PVP.enabled ? 'DISABLE PVP' : 'ENABLE PVP';
+  const autoBtn = $('pvpAuto');
+  if (autoBtn) autoBtn.textContent = PVP.auto ? 'AUTO-DUEL ON' : 'AUTO-DUEL OFF';
+  if (!board) return;
+  board.textContent = '';
+  for (const [pid, p] of NET.players) {
+    if (pid === NET.pid) continue;
+    if (!NET.players.has(pid)) continue;
+    const st = NET.pvp.get(pid);
+    const row = document.createElement('div'); row.className = 'item';
+    const left = document.createElement('div');
+    const b = document.createElement('b'); b.textContent = p.name || pid; left.appendChild(b);
+    const small = document.createElement('small');
+    small.textContent = st
+      ? (st.enabled ? `${st.health | 0}/${PVP.maxHealth} HP · ${st.kills | 0}K/${st.deaths | 0}D` : 'PvP off')
+      : 'not in PvP';
+    left.appendChild(small); row.appendChild(left);
+    if (st && st.enabled) {
+      const d = Math.hypot((p.x || 0) - player.x, (p.z || 0) - player.z);
+      const tag = document.createElement('small'); tag.textContent = `${d.toFixed(1)}m`;
+      row.appendChild(tag);
+    }
+    board.appendChild(row);
+  }
+  if (!board.children.length) {
+    const empty = document.createElement('p'); empty.className = 'goal';
+    empty.textContent = 'No other player in the room yet.';
+    board.appendChild(empty);
+  }
+  if (PVP.feed.length) {
+    const feed = document.createElement('p'); feed.className = 'why';
+    feed.textContent = PVP.feed.slice(-3).join(' · ');
+    board.appendChild(feed);
+  }
+}
+function togglePvP() {
+  PVP.enabled = !PVP.enabled;
+  if (!PVP.enabled) { PVP.auto = false; if (PVP.autoTimer) { clearInterval(PVP.autoTimer); PVP.autoTimer = 0; } }
+  PVP.health = PVP.maxHealth;
+  publishPvPState();
+  renderPvP();
+  toast(PVP.enabled ? 'PVP ON · HITS ARE LIVE' : 'PVP OFF · NO DAMAGE', 2400);
+}
+function pvpAttack(targetPid) {
+  if (!PVP.enabled) { toast('ENABLE PVP IN THE PVP PANEL', 2200); return { ok: false, reason: 'disabled' }; }
+  const now = Date.now();
+  if (now - PVP.lastHitAt < 800) return { ok: false, reason: 'cooldown' };
+  let target = null, best = 4.5;
+  for (const [pid, p] of NET.players) {
+    if (pid === NET.pid) continue;
+    const st = NET.pvp.get(pid);
+    if (!st || !st.enabled || (st.health | 0) <= 0) continue;
+    const d = Math.hypot((p.x || 0) - player.x, (p.z || 0) - player.z);
+    if (d < best) { best = d; target = pid; }
+  }
+  if (targetPid) {
+    const st = NET.pvp.get(targetPid), p = NET.players.get(targetPid);
+    const d = p ? Math.hypot((p.x || 0) - player.x, (p.z || 0) - player.z) : Infinity;
+    if (!p || !st || !st.enabled || (st.health | 0) <= 0 || d > 4.5) {
+      return { ok: false, reason: 'no-target' };
+    }
+    target = targetPid; best = d;
+  }
+  if (!target) { toast('NO PVP TARGET IN RANGE', 2200); return { ok: false, reason: 'no-target' }; }
+  PVP.lastHitAt = now;
+  PVP.sent += 1;
+  publishPvPState();
+  mqttPublish('pvp/' + target + '/hit', { from: NET.pid, to: target, damage: 20, at: now }, 1, false);
+  const name = (NET.players.get(target) || {}).name || target;
+  PVP.feed.push(`${NET.name} hit ${name}`);
+  mqttPublish('pvp/feed', { text: `${NET.name} hit ${name}`, at: now }, 1, false);
+  toast(`HIT ${name.toUpperCase()} · 20 DAMAGE`, 1600);
+  renderPvP();
+  return { ok: true, target, damage: 20, distance: best };
+}
+function pvpHandleHit(data) {
+  if (!data || data.to !== NET.pid || !PVP.enabled || PVP.health <= 0) return;
+  if (!pvpOnce(data.at ? 'hit:' + (data.from || '') + ':' + data.at : '')) return;
+  PVP.health = Math.max(0, PVP.health - (Number(data.damage) || 20));
+  publishPvPState();
+  renderPvP();
+  if (PVP.health <= 0) {
+    PVP.deaths += 1;
+    PVP.respawnAt = Date.now() + 3000;
+    publishPvPState();
+    PVP.feed.push(`${NET.name} was downed`);
+    mqttPublish('pvp/' + NET.pid + '/downed', { by: data.from || '', at: Date.now() }, 1, false);
+    mqttPublish('pvp/feed', { text: `${NET.name} was downed`, at: Date.now() }, 1, false);
+    toast('DOWNED · RESPAWNING IN 3 s', 2600);
+    setTimeout(() => {
+      player.x = 48.5; player.y = 9; player.z = 37.5; player.vy = 0;
+      PVP.health = PVP.maxHealth;
+      publishPvPState();
+      renderPvP();
+      toast('RESPAWNED · PVP READY', 2000);
+    }, 3000);
+  }
+}
+
+/// MQTT QoS 1 is at-least-once: a re-delivered hit or down must not count twice.
+/// Keys carry the sender's millisecond stamp, which the 800 ms cooldown makes unique
+/// within a duel. A sender with no stamp is accepted rather than silently dropped.
+function pvpOnce(key) {
+  if (!key) return true;
+  if (PVP.recent.includes(key)) return false;
+  PVP.recent.push(key);
+  if (PVP.recent.length > 32) PVP.recent.shift();
+  return true;
+}
+function pvpNearestTarget() {
+  let target = null, best = 4.5;
+  for (const [pid, p] of NET.players) {
+    if (pid === NET.pid) continue;
+    const st = NET.pvp.get(pid);
+    if (!st || !st.enabled || (st.health | 0) <= 0) continue;
+    const d = Math.hypot((p.x || 0) - player.x, (p.z || 0) - player.z);
+    if (d < best) { best = d; target = pid; }
+  }
+  return target;
+}
+/// Opt-in on top of opt-in: the player still enables PvP, and then may ask the
+/// page to take the swings at whatever opted-in peer is inside range. This is
+/// what lets a phone that is driven by an AI duel without a thumb.
+function setAutoDuel(on) {
+  // One command is enough: asking for auto-duel implies consent to duel.
+  if (on && !PVP.enabled) togglePvP();
+  PVP.auto = !!on && PVP.enabled;
+  if (PVP.autoTimer) { clearInterval(PVP.autoTimer); PVP.autoTimer = 0; }
+  if (PVP.auto) {
+    PVP.autoTimer = setInterval(() => {
+      if (!PVP.auto || !PVP.enabled || PVP.health <= 0) return;
+      const target = pvpNearestTarget();
+      if (target) pvpAttack(target);
+    }, 1200);
+  }
+  renderPvP();
+  toast(PVP.auto ? 'AUTO-DUEL ON · SWINGS AT OPTED-IN PEERS' : 'AUTO-DUEL OFF', 2200);
+  return PVP.auto;
+}
+function pvpCommand(data) {
+  if (!data || typeof data.action !== 'string') return;
+  if (data.to && data.to !== NET.pid && data.to !== NET.name) return;
+  switch (data.action) {
+    case 'pvp-on': if (!PVP.enabled) togglePvP(); break;
+    case 'pvp-off': if (PVP.enabled) togglePvP(); break;
+    case 'auto': setAutoDuel(true); break;
+    case 'stop-auto': setAutoDuel(false); break;
+    case 'attack': pvpAttack(data.target); break;
+    default: break;
+  }
+}
+
+
+// ----------------------------------------------------------- AI game actions --
+// One bounded seam for the native tool loop and the command centre. Every action
+// returns within about three seconds and reports the world state it produced, so
+// a caller never has to guess whether a move or a block edit happened.
+async function runGameAction(action, args) {
+  const opts = args || {};
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const snap = (extra) => Object.assign({
+    ok: true, action: String(action || 'status'),
+    pid: NET.pid, connected: !!NET.connected,
+    x: player.x, y: player.y, z: player.z, yaw: player.yaw, pitch: player.pitch,
+    health: PVP.health, pvp: PVP.enabled, auto: PVP.auto,
+    kills: PVP.kills, deaths: PVP.deaths,
+    placed: state.placed, broken: state.broken,
+    nearNpc: nearNPC ? nearNPC.name : null,
+    nearBusiness: nearBiz ? nearBiz.name : null,
+    places: POIS.map((p) => ({ name: p.name, x: p.x, z: p.z,
+      distance: Math.hypot(p.x - player.x, p.z - player.z) }))
+      .sort((a, b) => a.distance - b.distance).slice(0, 8),
+    players: [...NET.players.keys()],
+    render: renderInfo(),
+    at: Date.now()
+  }, extra || {});
+  const name = String(action || 'status').toLowerCase();
+
+  if (name === 'status') return snap();
+
+  if (name === 'walk') {
+    const forward = clamp(Number(opts.forward) || 0, -1, 1);
+    const right = clamp(Number(opts.right) || 0, -1, 1);
+    const ms = clamp(Number(opts.ms) || 800, 100, 3000);
+    const before = { x: player.x, z: player.z };
+    // The joystick's y is negative-forward: `f = … - joy.y` in the movement loop.
+    window.nautilusInput.move(right, -forward);
+    await sleep(ms);
+    window.nautilusInput.move(0, 0);
+    await sleep(60);
+    return snap({ moved: Math.hypot(player.x - before.x, player.z - before.z) });
+  }
+
+  if (name === 'turn') {
+    const degrees = clamp(Number(opts.degrees) || 0, -360, 360);
+    player.yaw -= degrees * Math.PI / 180;
+    return snap();
+  }
+
+  if (name === 'goto') {
+    // Open-ground steering only: it does not path around a wall. The reported
+    // `distance` is what tells a caller it is stuck.
+    let tx = Number(opts.x), tz = Number(opts.z);
+    const placeName = String(opts.place || '').trim().toLowerCase();
+    if (placeName) {
+      // Nearest match, not document order. Two places can share a name, and the
+      // first in the world file was 1 km away while the one beside the player
+      // was the one the user meant.
+      let matches = POIS.filter((p) => p.name.toLowerCase() === placeName);
+      if (!matches.length) {
+        matches = POIS.filter((p) => p.name.toLowerCase().includes(placeName));
+      }
+      if (!matches.length) {
+        return { ok: false, error: 'unknown place: ' + opts.place,
+                 places: POIS.map((p) => p.name).slice(0, 20) };
+      }
+      matches.sort((a, b) => Math.hypot(a.x - player.x, a.z - player.z)
+                           - Math.hypot(b.x - player.x, b.z - player.z));
+      tx = matches[0].x; tz = matches[0].z;
+    }
+    if (!Number.isFinite(tx) || !Number.isFinite(tz)) {
+      return { ok: false, error: 'goto needs numeric x and z, or a place name' };
+    }
+    const ms = clamp(Number(opts.ms) || 2500, 100, 3000);
+    const started = Date.now();
+    let distance = Math.hypot(tx - player.x, tz - player.z);
+    while (Date.now() - started < ms && distance > 1.2) {
+      // Forward is (sin yaw, -cos yaw); aim it straight at the target.
+      player.yaw = Math.atan2(tx - player.x, -(tz - player.z));
+      window.nautilusInput.move(0, -1);
+      await sleep(90);
+      distance = Math.hypot(tx - player.x, tz - player.z);
+    }
+    window.nautilusInput.move(0, 0);
+    await sleep(60);
+    return snap({ distance: Math.hypot(tx - player.x, tz - player.z), target: { x: tx, z: tz } });
+  }
+
+  if (name === 'jump') {
+    window.nautilusInput.press('jump', true);
+    await sleep(90);
+    window.nautilusInput.press('jump', false);
+    return snap();
+  }
+
+  if (name === 'place' || name === 'break') {
+    // The block under the crosshair is a raycast from the eye. A caller that does
+    // not aim is the common case, so aim at the ground a few blocks ahead and wait
+    // for a landing; otherwise a jump leaves the ray in the air and the action is
+    // accepted but edits nothing.
+    for (let i = 0; i < 12 && !player.onGround; i++) await sleep(50);
+    player.pitch = clamp(Number(opts.pitch === undefined ? -0.4 : opts.pitch), -1.45, 1.45);
+    await sleep(160);
+    const placedBefore = state.placed, brokenBefore = state.broken;
+    window.nautilusInput.press(name, true);
+    await sleep(120);
+    window.nautilusInput.press(name, false);
+    await sleep(80);
+    return snap({
+      placedDelta: (state.placed | 0) - (placedBefore | 0),
+      brokenDelta: (state.broken | 0) - (brokenBefore | 0)
+    });
+  }
+
+  if (name === 'interact') {
+    window.nautilusInput.interact();
+    await sleep(80);
+    return snap();
+  }
+
+  if (name === 'attack') {
+    const strike = pvpAttack(opts.target || undefined);
+    return snap({ strike });
+  }
+
+  if (name === 'pvp') {
+    const sub = String(opts.subaction || '').toLowerCase();
+    if (sub === 'on' && !PVP.enabled) togglePvP();
+    else if (sub === 'off' && PVP.enabled) togglePvP();
+    else if (sub === 'auto' || sub === 'duel') setAutoDuel(true);
+    else if (sub === 'stop-auto') setAutoDuel(false);
+    return snap();
+  }
+
+  if (name === 'panel') {
+    const panel = String(opts.panel || 'status');
+    if (!PANELS.includes(panel)) return { ok: false, error: 'unknown panel: ' + panel };
+    openPanel(panel);
+    return snap({ panel });
+  }
+
+  if (name === 'assist') {
+    const reply = assistantIntent(String(opts.text || ''));
+    return snap({ reply });
+  }
+
+  return { ok: false, error: 'unknown game action: ' + name };
+}
+
+function syncCampaignMenu() {
+  const btn = $('btnCampaignMenu'), panel = $('campaign');
+  if (!btn || !panel) return;
+  const open = !panel.classList.contains('hidden');
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  btn.classList.toggle('on', open);
+}
+function toggleCampaignMenu() {
+  const panel = $('campaign');
+  if (!panel) return;
+  if (panel.classList.contains('hidden')) openPanel('campaign');
+  else { panel.classList.add('hidden'); syncCampaignMenu(); updatePanelFocus(); }
+}
 let recognizer = null;
 function startAssist() {
   const voiceEl = $('voice');
@@ -4999,8 +5682,16 @@ for (const btn of document.querySelectorAll('#pad button')) {
   btn.addEventListener('click', () => padAction(btn.dataset.pad));
 }
 for (const btn of document.querySelectorAll('[data-close]')) {
-  btn.addEventListener('click', () => { const el = $(btn.dataset.close); if (el) el.classList.add('hidden'); });
+  btn.addEventListener('click', () => { const el = $(btn.dataset.close); if (el) el.classList.add('hidden'); syncCampaignMenu(); updatePanelFocus(); });
 }
+if ($('btnCampaignMenu')) $('btnCampaignMenu').addEventListener('click', toggleCampaignMenu);
+if ($('glRestore')) $('glRestore').addEventListener('click', () => location.reload());
+const statusRefreshTimer = setInterval(() => {
+  const panel = $('status');
+  if (panel && !panel.classList.contains('hidden')) renderStatus();
+}, 1000);
+if ($('pvpToggle')) $('pvpToggle').addEventListener('click', togglePvP);
+if ($('pvpAuto')) $('pvpAuto').addEventListener('click', () => setAutoDuel(!PVP.auto));
 if ($('btnCitizens')) $('btnCitizens').addEventListener('click', () => openPanel('citizens'));
 if ($('btnAssist')) $('btnAssist').addEventListener('click', startAssist);
 if ($('citCreate')) $('citCreate').addEventListener('click', () => {
@@ -5030,6 +5721,7 @@ window.__nc = {
   get state() { return state; },
   get quests() { return QUESTS.map((q) => ({ id: q.id, done: !!state.quests[q.id] })); },
   get manifest() { return WORLD; },
+  renderInfo() { return renderInfo(); },
   get orders() { return state.orders.map((o) => ({ ...o })); },
   get focusCounts() { return { ...state.focusCounts }; },
   intent(text) { return intentTool(text); },
@@ -5064,6 +5756,7 @@ window.__nc = {
   verify(pid) { return verifyPlayer(pid); },
   get sats() { return state.sats; },
   get credits() { return state.credits; },
+  get npcs() { return NPCS.map((n) => ({ id: n.id, name: n.name, role: n.role, x: n.x, z: n.z, goal: n.aiGoal, shard: n.shard })); },
   get shards() { return state.shards; },
   get citizens() { return state.citizens.map((c) => ({ ...c })); },
   get goal() { return state.goal; },
@@ -5075,7 +5768,7 @@ window.__nc = {
   campaignAdd, acceptContract, deliverContract,
   security() { const s = shardAt(player.x, player.z); return { shard: s + 1, tier: SHARD_TIERS[s] }; },
   shardAt, createCitizen, guideCitizens, planCitizens, deployCitizen, citizenStatus,
-  assistantIntent, openPanel, closePanels,
+  assistantIntent, gameAction: runGameAction, openPanel, closePanels,
   market() { return BUSINESSES.map((b) => ({ id: b.id, item: b.item, price: marketPrice(b) })); },
   get gameDay() { return gameDay(); },
   get inventory() { return { ...state.inventory }; },
@@ -5104,6 +5797,13 @@ window.__nc = {
       pid: NET.pid
     };
   },
+  publish: (suffix, payload, qos, retain) => mqttPublish(suffix, payload, qos, retain),
+  pvp: { enable: () => { if (!PVP.enabled) togglePvP(); return PVP.enabled; },
+         disable: () => { if (PVP.enabled) togglePvP(); return PVP.enabled; },
+         toggle: togglePvP, status: () => ({ enabled: PVP.enabled, auto: PVP.auto, health: PVP.health, kills: PVP.kills, deaths: PVP.deaths, sent: PVP.sent }),
+         auto: setAutoDuel,
+         peers: () => [...NET.pvp.entries()],
+         attack: (pid) => pvpAttack(pid) },
   start: startGame,
   reset: resetWorld,
   map: toggleMap,
