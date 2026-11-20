@@ -5129,6 +5129,103 @@ function pvpCommand(data) {
 // One bounded seam for the native tool loop and the command centre. Every action
 // returns within about three seconds and reports the world state it produced, so
 // a caller never has to guess whether a move or a block edit happened.
+
+// ------------------------------------------------------- path to a landmark --
+// `goto` used to steer straight at the target, so a wall stopped it forever.
+// The AI players need to reach the Community Garden and the other landmarks, so
+// run A* on the walkable voxel surface and follow the cells. It is a 2D grid
+// (96 × 96) with a one-block step limit; the page is still the authority for
+// collision, because the movement loop moves the real player.
+function ncTopGrid() {
+  const top = new Int16Array(WX * WZ);
+  for (let z = 0; z < WZ; z++) {
+    for (let x = 0; x < WX; x++) {
+      let t = -1;
+      for (let y = WY - 1; y >= 0; y--) {
+        if (!solidAt(x, y, z)) continue;
+        t = y;
+        break;
+      }
+      top[z * WX + x] = t;
+    }
+  }
+  return top;
+}
+function ncCanStand(top, x, z, fromTop) {
+  if (x < 0 || z < 0 || x >= WX || z >= WZ) return false;
+  const t = top[z * WX + x];
+  if (t < 0 || t > WY - 3) return false;
+  if (Math.abs(t - fromTop) > 1) return false;
+  return !solidAt(x, t + 1, z) && !solidAt(x, t + 2, z);
+}
+function ncFindPath(sx, sz, tx, tz) {
+  if (sx < 0 || sz < 0 || sx >= WX || sz >= WZ) return null;
+  if (tx < 0 || tz < 0 || tx >= WX || tz >= WZ) return null;
+  const top = ncTopGrid();
+  const startTop = top[sz * WX + sx];
+  if (startTop < 0) return null;
+  // A landmark can sit on a block the player cannot stand in; use the nearest
+  // walkable cell within three blocks.
+  let target = -1;
+  for (let r = 0; r <= 3 && target < 0; r++) {
+    for (let dz = -r; dz <= r && target < 0; dz++) {
+      for (let dx = -r; dx <= r && target < 0; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+        const x = tx + dx, z = tz + dz;
+        if (ncCanStand(top, x, z, startTop)) target = z * WX + x;
+      }
+    }
+  }
+  if (target < 0) return null;
+  const N = WX * WZ;
+  const g = new Float32Array(N).fill(Infinity);
+  const f = new Float32Array(N).fill(Infinity);
+  const came = new Int32Array(N).fill(-1);
+  const closed = new Uint8Array(N);
+  const open = [];
+  const start = sz * WX + sx;
+  const h = (i) => {
+    const x = i % WX, z = (i / WX) | 0;
+    const ax = Math.abs(x - (target % WX)), az = Math.abs(z - ((target / WX) | 0));
+    return Math.max(ax, az) + 0.414 * Math.min(ax, az);
+  };
+  g[start] = 0; f[start] = h(start); open.push(start);
+  while (open.length) {
+    let best = 0;
+    for (let i = 1; i < open.length; i++) if (f[open[i]] < f[open[best]]) best = i;
+    const cur = open.splice(best, 1)[0];
+    if (cur === target) break;
+    if (closed[cur]) continue;
+    closed[cur] = 1;
+    const cx = cur % WX, cz = (cur / WX) | 0;
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dz) continue;
+        const nx = cx + dx, nz = cz + dz;
+        if (!ncCanStand(top, nx, nz, top[cur])) continue;
+        if (dx && dz &&
+            (!ncCanStand(top, cx + dx, cz, top[cur]) ||
+             !ncCanStand(top, cx, cz + dz, top[cur]))) continue;
+        const next = nz * WX + nx;
+        if (closed[next]) continue;
+        const cost = g[cur] + (dx && dz ? 1.414 : 1);
+        if (cost >= g[next]) continue;
+        g[next] = cost;
+        f[next] = cost + h(next);
+        came[next] = cur;
+        open.push(next);
+      }
+    }
+  }
+  if (target !== start && came[target] < 0) return null;
+  const path = [];
+  for (let i = target; i !== start && i >= 0; i = came[i]) {
+    path.push({ x: i % WX, z: (i / WX) | 0 });
+  }
+  path.reverse();
+  return path;
+}
+
 async function runGameAction(action, args) {
   const opts = args || {};
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -5197,16 +5294,33 @@ async function runGameAction(action, args) {
     }
     const ms = clamp(Number(opts.ms) || 2500, 100, 3000);
     const started = Date.now();
-    let distance = Math.hypot(tx - player.x, tz - player.z);
-    while (Date.now() - started < ms && distance > 1.2) {
-      // Forward is (sin yaw, -cos yaw); aim it straight at the target.
-      player.yaw = Math.atan2(tx - player.x, -(tz - player.z));
-      window.nautilusInput.move(0, -1);
-      await sleep(90);
-      distance = Math.hypot(tx - player.x, tz - player.z);
+    const path = ncFindPath(Math.floor(player.x), Math.floor(player.z),
+                            Math.floor(tx), Math.floor(tz));
+    if (path && path.length) {
+      let next = 0;
+      while (next < path.length && Date.now() - started < ms) {
+        const cell = path[next];
+        const dx = cell.x + 0.5 - player.x, dz = cell.z + 0.5 - player.z;
+        if (Math.hypot(dx, dz) < 0.55) { next++; continue; }
+        // Forward is (sin yaw, -cos yaw); aim at the next walkable cell.
+        player.yaw = Math.atan2(dx, -dz);
+        window.nautilusInput.move(0, -1);
+        await sleep(45);
+      }
+      window.nautilusInput.move(0, 0);
+      await sleep(60);
+    } else {
+      // No surface path: keep the old open-ground steering as the fallback.
+      let distance = Math.hypot(tx - player.x, tz - player.z);
+      while (Date.now() - started < ms && distance > 1.2) {
+        player.yaw = Math.atan2(tx - player.x, -(tz - player.z));
+        window.nautilusInput.move(0, -1);
+        await sleep(90);
+        distance = Math.hypot(tx - player.x, tz - player.z);
+      }
+      window.nautilusInput.move(0, 0);
+      await sleep(60);
     }
-    window.nautilusInput.move(0, 0);
-    await sleep(60);
     return snap({ distance: Math.hypot(tx - player.x, tz - player.z), target: { x: tx, z: tz } });
   }
 
