@@ -4362,7 +4362,7 @@ function renderNexusPanel() {
     const block = b ? ` · block #${b.height | 0} ${String(b.blockAddress || '').slice(0, 12)} · nonce ${String(b.nonce || '').slice(0, 6)}` : '';
     const g = NET.global;
     const global = g ? ` · global #${g.height | 0} ${String(g.root || '').slice(0, 10)}` : '';
-    goalEl.textContent = `${n.miner === 'command-center' ? 'CC MINED' : 'LOCAL'} · ${linked}/4 SHARDS · ${nexusStatus()} · pools M${pools.miners | 0} G${pools.genesis | 0} C${pools.creator | 0} D${pools.drip | 0}${block}${global}`;
+    goalEl.textContent = `${n.miner === 'command-center' ? 'CC MINED' : 'LOCAL'} · ${linked}/4 SHARDS · ${nexusStatus()} · pools M${(pools.miners | 0) + (pools.miner | 0)} G${pools.genesis | 0} C${pools.creator | 0} D${pools.drip | 0}${block}${global}`;
   }
   shardsEl.textContent = '';
   for (let i = 0; i < SHARD_COUNT; i++) {
@@ -6264,6 +6264,10 @@ function renderCampaign() {
 // -------------------------------------------------------- voice + panels ---
 const PANELS = ['status', 'pvp', 'citizens', 'market', 'nexus', 'diplomacy', 'campaign'];
 function openPanel(id) {
+  // A panel is the focus; do not leave the first-run gesture guide or coach
+  // floating over it.
+  if (gestureGuideEl) gestureGuideEl.classList.add('hidden');
+  if (coach.open) coachHide(false);
   for (const p of PANELS) {
     const el = $(p);
     if (el) el.classList.toggle('hidden', p !== id);
@@ -6316,7 +6320,7 @@ function renderStatus() {
     ['Nexus', nexusStatus()],
     ['Nexus MMR', NET.nexus && NET.nexus.root ? String(NET.nexus.root).slice(0, 16) : '—'],
     ['Nexus shards', `${(NET.nexus || {}).connected | 0}/4 · ${Object.keys((NET.nexus || {}).shards || {}).length} roots`],
-    ['Pools', (() => { const p = (NET.nexus || {}).pools || {}; return `M${p.miners | 0} G${p.genesis | 0} C${p.creator | 0} D${p.drip | 0}`; })()],
+    ['Pools', (() => { const p = (NET.nexus || {}).pools || {}; return `M${(p.miners | 0) + (p.miner | 0)} G${p.genesis | 0} C${p.creator | 0} D${p.drip | 0}`; })()],
     ['Block reward', NET.block ? `#${NET.block.height | 0} · ${NET.block.totalSats | 0} SAT · ${String(NET.block.blockAddress || '').slice(0, 12)}` : '—'],
     ['Global chain', NET.global ? `#${NET.global.height | 0} · ${String(NET.global.root || '').slice(0, 12)}` : 'not seen'],
     ['Epoch', `${state.epoch} · D${epochDay()} · C${state.epochCohort}`],
