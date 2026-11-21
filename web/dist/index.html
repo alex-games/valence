@@ -4630,13 +4630,21 @@ const NET = {
   enabled: false, client: null, connected: false, pid: null,
   name: '', color: 0, players: new Map(), scores: new Map(),
   lastPos: 0, retry: 0, anchor: null, revision: 0, chatHideTimer: 0,
-  accounts: new Map(), sides: new Map(), pvp: new Map(), nexus: null, nft: {}, block: null, global: null
+  accounts: new Map(), sides: new Map(), pvp: new Map(), nexus: null, nft: {}, block: null, global: null,
+  nexusClient: null
 };
 const MQTT_BASE = 'wa/v1/c2/torrance';
 const MQTT_FILTERS = [
   'player/+/presence', 'player/+/pos', 'player/+/chat', 'player/+/score',
-  'npc/+/state', 'map/state', 'map/block', 'ledger/anchor', 'ledger/side/+', 'player/+/account', 'pvp/+/state', 'pvp/+/hit', 'pvp/+/downed', 'pvp/feed', 'game/action',
-  'nexus/drip', 'nexus/state', 'nexus/connect', 'nexus/claim', 'nexus/nft/+', 'nexus/transit', 'nexus/block'
+  'npc/+/state', 'map/state', 'map/block', 'ledger/anchor', 'ledger/side/+', 'player/+/account', 'pvp/+/state', 'pvp/+/hit', 'pvp/+/downed', 'pvp/feed', 'game/action'
+];
+// **Nexus state gets its own MQTT session.** On the public broker a mixed
+// 22-filter session returns SUBACK success yet never delivers the retained
+// Nexus/NFT snapshot. A second, Nexus-only client hydrates deterministically
+// and keeps the high-rate player traffic out of the low-rate economy path.
+const NEXUS_FILTERS = [
+  'nexus/drip', 'nexus/state', 'nexus/connect', 'nexus/claim',
+  'nexus/nft/+', 'nexus/transit', 'nexus/block'
 ];
 const PLAYER_COLORS = ['#f4c95d', '#8fd14f', '#7fc4ff', '#ff8f6b', '#c99cff', '#5be0c8', '#ff7fb0', '#d7dde0'];
 
@@ -5062,6 +5070,7 @@ function handleTopicMessage(topic, bytes, retained) {
       NET.nexus = { ...(NET.nexus || {}), ...data, claims: (NET.nexus || {}).claims || {} };
     } else if (parts[5] === 'state') {
       NET.nexus = { ...(NET.nexus || {}), ...data, claims: data.claims || (NET.nexus || {}).claims || {} };
+      if (data.nft) applyNftState(data.nft);
     } else if (parts[5] === 'connect') {
       NET.nexus = { ...(NET.nexus || {}), ...data, shards: data.roots || (NET.nexus || {}).shards || {} };
     } else if (parts[5] === 'claim') {
@@ -5126,7 +5135,6 @@ function connectNet() {
     onConnect: () => {
       NET.connected = true;
       client.subscribe(MQTT_FILTERS.map((topic) => ({ topic: MQTT_BASE + '/' + topic, qos: 1 })));
-      client.subscribe([{ topic: 'swarm/global/coord/ledger', qos: 1 }]);
       publishPresence();
       renderOnline();
       appendChat('', 'MQTT v5 connected · ' + location.host, false, true);
@@ -5145,8 +5153,34 @@ function connectNet() {
   });
   NET.client = client;
   client.connect();
+  // A second, low-rate session for the Community Nexus and the global ledger.
+  // Its messages bypass the game ring so a player-position burst cannot evict
+  // the NFT snapshot.
+  if (NET.nexusClient) { try { NET.nexusClient.disconnect(); } catch (e) {} }
+  const nexusClient = new window.MqttV5({
+    url: mqttUrl(),
+    clientId: 'nc-nexus-' + NET.pid,
+    keepalive: 30,
+    onConnect: () => {
+      nexusClient.subscribe(NEXUS_FILTERS.map((topic) => ({
+        topic: MQTT_BASE + '/' + topic, qos: 1
+      })));
+      nexusClient.subscribe([{ topic: 'swarm/global/coord/ledger', qos: 1 }]);
+      nexusClient.publish(MQTT_BASE + '/nexus/hello',
+        JSON.stringify({ pid: NET.pid, at: Date.now() }), 1, false);
+    },
+    onMessage: (topic, payload) => {
+      try { handleTopicMessage(topic, payload, false); }
+      catch (e) { console.warn('nexus:', topic, e); }
+    },
+    onOffline: () => {},
+    onLog: (line) => console.warn('mqtt-nexus:', line)
+  });
+  NET.nexusClient = nexusClient;
+  nexusClient.connect();
 }
 function leaveMqtt() {
+  if (NET.nexusClient) { try { NET.nexusClient.disconnect(); } catch (e) {} NET.nexusClient = null; }
   if (!NET.connected) return;
   mqttPublish('player/' + NET.pid + '/presence', new Uint8Array(0), 1, true);
   try { NET.client.disconnect(); } catch (e) {}
@@ -6642,6 +6676,7 @@ async function runGameAction(action, args) {
       distance: Math.hypot(p.x - player.x, p.z - player.z) }))
       .sort((a, b) => a.distance - b.distance).slice(0, 8),
     players: [...NET.players.keys()],
+    sats: state.sats, credits: state.credits,
     render: renderInfo(),
     gestures: GESTURE_NAV ? { ...gesture.stats, fov: viewFov,
                               fly: player.fly, selected } : null,
@@ -6682,6 +6717,10 @@ async function runGameAction(action, args) {
     else if (sub === 'nft-claim') nftClaim(opts.id);
     else if (sub === 'nft-list') listNft(opts.id, opts.price);
     else if (sub === 'nft-buy') buyNft(opts.id);
+    else if (sub === 'nft-clear') {
+      // Clear a stale local cache entry; the miner hub remains authoritative.
+      delete NET.nft[opts.id]; delete state.nft[opts.id]; saveSoon();
+    } else if (sub === 'raw') return snap({ raw: { nexus: NET.nexus, nft: NET.nft } });
     return snap();
   }
 
@@ -7312,6 +7351,7 @@ window.__nc = {
                      pools: (nexusCurrent() || {}).pools || {} }),
     claim: claimNexus, verify: verifyNexus, transit: transitToShard,
     shards: () => ({ ...((NET.nexus || {}).shards || {}) }),
+    raw: () => ({ nexus: NET.nexus, nft: NET.nft }),
     nft: {
       metadata: nftMetadata, claim: nftClaim, list: listNft, buy: buyNft,
       state: () => ({ ...(NET.nft || {}) }),
