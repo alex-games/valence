@@ -323,6 +323,28 @@ body.touch #crosshair { opacity: 0.6; }
 #minimap canvas { width: 140px; height: 140px; display: block; image-rendering: pixelated; border-radius: 4px; }
 #minimap span { display: block; margin-top: 4px; font-size: 8px; letter-spacing: 0.1em; color: var(--muted); text-align: center; }
 
+#nexusHud {
+  position: absolute;
+  left: calc(12px + env(safe-area-inset-left));
+  top: calc(10px + env(safe-area-inset-top));
+  min-height: calc(44px * var(--ui-scale));
+  padding: 0 calc(12px * var(--ui-scale));
+  display: none;
+  align-items: center;
+  border: 1px solid var(--gold);
+  border-radius: calc(9px * var(--ui-scale));
+  background: rgba(9, 15, 18, 0.88);
+  color: var(--gold);
+  font-family: inherit;
+  font-size: calc(10px * var(--ui-scale));
+  letter-spacing: 0.10em;
+  z-index: 21;
+}
+#nexusHud:not(.hidden) { display: flex; }
+body.native #nexusHud {
+  top: calc(10px * var(--ui-scale) + 160px + 8px * var(--ui-scale) + env(safe-area-inset-top));
+}
+
 /* ---------------------------------------------------------------- touch -- */
 #touch { display: none; }
 body.touch #touch { display: block; }
@@ -459,6 +481,61 @@ body.gestures #gestureHelp { display: flex; }
   from { opacity: 0.95; transform: translate(-50%, -50%) scale(0.35); }
   to { opacity: 0; transform: translate(-50%, -50%) scale(1.8); }
 }
+
+/* --- gameplay coach marks / tooltips ------------------------------------- */
+#coachHelp {
+  position: absolute;
+  top: calc(10px * var(--ui-scale) + env(safe-area-inset-top));
+  right: calc(12px * var(--ui-scale) + env(safe-area-inset-right));
+  width: calc(44px * var(--ui-scale));
+  height: calc(44px * var(--ui-scale));
+  display: none;
+  align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(10, 16, 20, 0.60);
+  color: var(--ink);
+  font-family: inherit; font-size: calc(15px * var(--ui-scale)); font-weight: 700;
+  z-index: 21;
+  touch-action: manipulation;
+}
+body.native #coachHelp,
+body.touch #coachHelp { display: flex; }
+body.gestures #coachHelp {
+  right: calc((12px + 44px + 8px) * var(--ui-scale) + env(safe-area-inset-right));
+}
+
+#coach {
+  position: absolute; inset: 0; z-index: 95;
+  pointer-events: none;
+}
+#coach.hidden { display: none; }
+#coachHole {
+  position: absolute;
+  border: 2px solid var(--gold);
+  border-radius: calc(12px * var(--ui-scale));
+  box-shadow: 0 0 0 9999px rgba(4, 8, 10, 0.58);
+  transition: left 0.18s ease, top 0.18s ease, width 0.18s ease, height 0.18s ease;
+  pointer-events: none;
+}
+#coachTip {
+  position: absolute;
+  width: min(calc(360px * var(--ui-scale)), calc(100vw - 36px * var(--ui-scale)));
+  padding: calc(14px * var(--ui-scale));
+  border: 1px solid var(--gold);
+  border-radius: calc(12px * var(--ui-scale));
+  background: rgba(9, 15, 18, 0.96);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+}
+#coachStep { color: var(--gold); font-size: calc(9px * var(--ui-scale)); letter-spacing: 0.14em; }
+#coachTip h2 { margin: calc(4px * var(--ui-scale)) 0 calc(6px * var(--ui-scale)); color: var(--green); font-size: calc(12px * var(--ui-scale)); letter-spacing: 0.14em; }
+#coachTip p { margin: 0 0 calc(10px * var(--ui-scale)); color: #cfdde1; font-size: calc(11px * var(--ui-scale)); line-height: 1.5; }
+#coachTip .coach-row { display: flex; gap: calc(6px * var(--ui-scale)); }
+#coachTip .coach-row button { flex: 1; min-height: calc(44px * var(--ui-scale)); border: 1px solid var(--line); border-radius: calc(8px * var(--ui-scale)); background: rgba(255,255,255,0.06); color: var(--ink); font-family: inherit; font-size: calc(10px * var(--ui-scale)); letter-spacing: 0.10em; }
+#coachTip .coach-row button:first-child { color: var(--muted); }
+#coachTip #coachNext { border-color: var(--green); color: var(--green); background: rgba(143, 209, 79, 0.14); }
+#coachTip #coachSkip { width: 100%; min-height: calc(44px * var(--ui-scale)); margin-top: calc(6px * var(--ui-scale)); border: 0; background: none; color: var(--muted); font-family: inherit; font-size: calc(9px * var(--ui-scale)); letter-spacing: 0.12em; }
 
 
 /* ---------------------------------------------------------------- modal -- */
@@ -954,6 +1031,49 @@ body.panel-open #quests, body.panel-open #minimap { opacity: 0; pointer-events: 
   cursor: pointer;
 }
 .panel-dismiss:hover, .panel-dismiss:focus-visible { border-color: var(--green); color: var(--green); }
+
+/* **Native density 3 would otherwise shrink the modal panels to 120 pt.**
+   The panels are controls, not world chrome: scale them back to their point
+   sizes while the canvas stays 1:1. */
+body.native .panel {
+  top: calc(62px * var(--ui-scale) + env(safe-area-inset-top));
+  right: calc(10px * var(--ui-scale) + env(safe-area-inset-right));
+  width: min(calc(360px * var(--ui-scale)), calc(100vw - 20px * var(--ui-scale)));
+  max-height: min(78vh, calc(560px * var(--ui-scale)));
+  padding: calc(12px * var(--ui-scale));
+  border-radius: calc(10px * var(--ui-scale));
+}
+body.native .panel h2 {
+  margin-bottom: calc(8px * var(--ui-scale));
+  font-size: calc(10px * var(--ui-scale));
+}
+body.native .panel h2 .x {
+  min-width: calc(44px * var(--ui-scale));
+  min-height: calc(44px * var(--ui-scale));
+  font-size: calc(13px * var(--ui-scale));
+}
+body.native .panel .goal,
+body.native .panel .why,
+body.native .panel .list .item,
+body.native .panel input,
+body.native .panel select,
+body.native .panel .row button,
+body.native .panel-dismiss {
+  font-size: calc(10px * var(--ui-scale));
+}
+body.native .panel .list .item { min-height: calc(44px * var(--ui-scale)); gap: calc(6px * var(--ui-scale)); }
+body.native .panel .list .item small { font-size: calc(9px * var(--ui-scale)); }
+body.native .panel .list .item button {
+  min-width: calc(44px * var(--ui-scale));
+  min-height: calc(44px * var(--ui-scale));
+  font-size: calc(9px * var(--ui-scale));
+}
+body.native .panel .row { gap: calc(5px * var(--ui-scale)); margin: calc(6px * var(--ui-scale)) 0; }
+body.native .panel input,
+body.native .panel select,
+body.native .panel .row button { min-height: calc(44px * var(--ui-scale)); padding: calc(6px * var(--ui-scale)) calc(7px * var(--ui-scale)); }
+body.native .panel-dismiss { min-height: calc(44px * var(--ui-scale)); margin-top: calc(12px * var(--ui-scale)); }
+
 #campaign.panel {
   top: calc(62px + env(safe-area-inset-top));
   left: 50%;
@@ -983,6 +1103,20 @@ body.panel-open #quests, body.panel-open #minimap { opacity: 0; pointer-events: 
 <body>
 
   <button id="gestureHelp" aria-label="Show gesture guide">?</button>
+  <button id="coachHelp" aria-label="How to play" title="How to play">?</button>
+  <div id="coach" class="hidden" role="dialog" aria-label="How to play">
+    <div id="coachHole" aria-hidden="true"></div>
+    <div id="coachTip">
+      <div id="coachStep">1 / 5</div>
+      <h2 id="coachTitle">MOVE</h2>
+      <p id="coachText"></p>
+      <div class="coach-row">
+        <button id="coachBack">BACK</button>
+        <button id="coachNext">NEXT</button>
+      </div>
+      <button id="coachSkip">SKIP TOUR</button>
+    </div>
+  </div>
   <div id="gestureGuide" class="hidden" role="dialog" aria-label="Gesture navigation guide">
     <div class="card">
       <h2>GESTURE NAVIGATION</h2>
@@ -1060,6 +1194,7 @@ body.panel-open #quests, body.panel-open #minimap { opacity: 0; pointer-events: 
   <div id="hint">Click to look around · WASD to move · 1–9 to pick a block</div>
 
   <div id="minimap"><canvas id="mapcanvas" width="192" height="192"></canvas><span>TORRANCE · N ↑</span></div>
+  <button id="nexusHud" class="hidden" title="Walk to the Community Nexus at spawn and collect the hourly sat">COMMUNITY NEXUS · 1 SAT</button>
 
   <div id="chat">
     <div id="chatlog"></div>
@@ -1128,6 +1263,21 @@ body.panel-open #quests, body.panel-open #minimap { opacity: 0; pointer-events: 
     <button class="panel-dismiss" data-close="market">DISMISS</button>
   </aside>
 
+  <aside id="nexus" class="panel hidden" aria-label="Community Nexus">
+    <h2><span>COMMUNITY NEXUS</span><button class="x" data-close="nexus" aria-label="Close">✕</button></h2>
+    <p class="goal" id="nexusGoal">CC-mined · 1 sat/hour · all four shards</p>
+    <div id="nexusShards" class="list"></div>
+    <div class="row">
+      <button id="nexusClaim">CLAIM 1 SAT</button>
+      <button id="nexusVerify">VERIFY MMR</button>
+    </div>
+    <p class="goal">TRANSIT</p>
+    <div class="row" id="nexusTransits"></div>
+    <p class="goal">EMERALD NFTS · ERC-721 METADATA</p>
+    <div id="nexusNft" class="list"></div>
+    <button class="panel-dismiss" data-close="nexus">DISMISS</button>
+  </aside>
+
   <aside id="diplomacy" class="panel hidden" aria-label="AI relations">
     <h2><span>AI RELATIONS</span><button class="x" data-close="diplomacy" aria-label="Close">✕</button></h2>
     <p class="goal">Contact in any shard · 7 game days to cool aggression</p>
@@ -1151,6 +1301,7 @@ body.panel-open #quests, body.panel-open #minimap { opacity: 0; pointer-events: 
     <button data-pad="pvp">PVP</button>
     <button data-pad="citizens">CITIZENS</button>
     <button data-pad="market">MARKET</button>
+    <button data-pad="nexus">NEXUS</button>
     <button data-pad="diplomacy">RELATIONS</button>
     <button data-pad="map">MAP</button>
     <button data-pad="claim">CLAIM</button>
@@ -1511,6 +1662,7 @@ const toastEl = $('toast');
 const hintEl = $('hint');
 const minimapEl = $('minimap');
 const mapCanvas = $('mapcanvas');
+const nexusHudEl = $('nexusHud');
 const welcomeEl = $('welcome');
 const helpEl = $('help');
 const completeEl = $('complete');
@@ -1553,6 +1705,16 @@ const gestureGuideEl = $('gestureGuide');
 const gestureGuideCloseEl = $('gestureGuideClose');
 const gestureHoldEl = $('gestureHold');
 const gestureRippleEl = $('gestureRipple');
+const coachHelpEl = $('coachHelp');
+const coachEl = $('coach');
+const coachHoleEl = $('coachHole');
+const coachTipEl = $('coachTip');
+const coachStepEl = $('coachStep');
+const coachTitleEl = $('coachTitle');
+const coachTextEl = $('coachText');
+const coachBackEl = $('coachBack');
+const coachNextEl = $('coachNext');
+const coachSkipEl = $('coachSkip');
 
 // ------------------------------------------------------------------- maths --
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -2743,17 +2905,130 @@ function gestureRipple(x, y) {
   setTimeout(() => { if (gestureRippleEl) gestureRippleEl.style.display = 'none'; }, 380);
 }
 function gestureGuide(force) {
-  if (!GESTURE_NAV || !gestureGuideEl) return;
+  if (!GESTURE_NAV || !gestureGuideEl) return false;
   if (!force) {
-    try { if (localStorage.getItem('nc_gesture_guide') === '1') return; } catch (e) {}
+    try { if (localStorage.getItem('nc_gesture_guide') === '1') return false; } catch (e) {}
   }
   gestureGuideEl.classList.remove('hidden');
   gesture.stats.guide++;
+  return true;
 }
 function gestureHideGuide() {
   if (!gestureGuideEl) return;
   gestureGuideEl.classList.add('hidden');
   try { localStorage.setItem('nc_gesture_guide', '1'); } catch (e) {}
+  maybeCoach(450);
+}
+
+// ---------------------------------------------------------- gameplay coach --
+// The coach marks are deliberately a short, skippable tour of the *game*, not a
+// second controls manual. Each step highlights a real region (left/right input,
+// hotbar, minimap, top menu) and tells the player what to do there. The ? button
+// reopens it; the first run is remembered in localStorage.
+const coach = { steps: [], index: 0, open: false };
+function coachMode() {
+  return GESTURE_NAV ? 'gestures' : (CONTROLS === 'off' ? 'off' : 'gamepad');
+}
+function coachRectFor(kind) {
+  const pad = 8 * UI_SCALE;
+  const elRect = (id) => {
+    const el = $(id);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { left: r.left - pad, top: r.top - pad, width: r.width + pad * 2, height: r.height + pad * 2 };
+  };
+  if (kind === 'left') return { left: 0, top: innerHeight * 0.30, width: innerWidth * 0.44, height: innerHeight * 0.58 };
+  if (kind === 'right') return { left: innerWidth * 0.44, top: innerHeight * 0.30, width: innerWidth * 0.56, height: innerHeight * 0.58 };
+  if (kind === 'hotbar') return elRect('hotbar') || { left: innerWidth * 0.2, top: innerHeight * 0.86, width: innerWidth * 0.6, height: 80 * UI_SCALE };
+  if (kind === 'map') return elRect('minimap') || { left: 0, top: 0, width: 180 * UI_SCALE, height: 180 * UI_SCALE };
+  if (kind === 'top') return { left: innerWidth * 0.28, top: 0, width: innerWidth * 0.44, height: 110 * UI_SCALE };
+  return { left: innerWidth * 0.25, top: innerHeight * 0.25, width: innerWidth * 0.5, height: innerHeight * 0.35 };
+}
+function coachSteps() {
+  const mode = coachMode();
+  const move = mode === 'gestures'
+    ? 'Drag on the left half. The floating stick appears where your thumb lands.'
+    : mode === 'off'
+      ? 'Use the left thumb zone to move. The page touch pad is the only controller in Off mode.'
+      : 'Push the left stick to move. The native stick is the lower-left control.';
+  const look = mode === 'gestures'
+    ? 'Drag on the right half to look. Tap places, hold breaks, double-tap jumps, triple-tap talks.'
+    : mode === 'off'
+      ? 'Use the right thumb zone to look. ⛏ breaks and ▣ places from the on-page pad.'
+      : 'Push the right stick to look. Jump, Break, Place and Attack are on the right.';
+  const act = mode === 'gestures'
+    ? 'Pinch to zoom. A two-finger tap attacks, horizontal swipe changes the block, vertical swipe toggles fly.'
+    : mode === 'off'
+      ? 'Tap a hotbar slot to choose a block. Tap ▣ to place and hold ⛏ to break.'
+      : 'The right-side buttons are Jump, Break, Place and Attack. Tap a hotbar slot to choose a block.';
+  return [
+    { title: 'MOVE', target: 'left', text: move },
+    { title: 'LOOK', target: 'right', text: look },
+    { title: 'ACT', target: mode === 'gestures' ? 'right' : 'hotbar', text: act },
+    { title: 'BLOCKS & TRADE', target: 'hotbar',
+      text: 'Break blocks to gather resources; the Garden Plot and Market Crate refill on a timer. Open + → Market to sell resources or the Nexus to trade emerald NFTs (100 sat child wallet + 1k block rewards).' },
+    { title: 'PEOPLE', target: 'center',
+      text: 'Walk up to a villager until their name appears, then talk. They give quests, directions and local colour.' },
+    { title: 'QUESTS & MAP', target: 'top',
+      text: 'Open + → Status for quests. The minimap marks the Garden, Market and the Community Nexus, where the CC drips 1 sat/hour.' },
+    { title: 'COMMUNITY NEXUS', target: 'map',
+      text: 'The Nexus links all four shards: transit between S1–S4, collect the hourly sat, verify the bagged MMR and trade NFTs. Open + → Nexus.' }
+  ];
+}
+function maybeCoach(delay = 0) {
+  if (!coachHelpEl) return;
+  try { if (localStorage.getItem('nc_coach_done') === '1') return; } catch (e) {}
+  if (gestureGuideEl && !gestureGuideEl.classList.contains('hidden')) return;
+  setTimeout(() => { if (!coach.open) coachShow(0); }, delay);
+}
+function coachPlace() {
+  const step = coach.steps[coach.index];
+  if (!step) return;
+  const target = coachRectFor(step.target);
+  const tipW = Math.min(360 * UI_SCALE, innerWidth - 36 * UI_SCALE);
+  coachTipEl.style.width = tipW + 'px';
+  coachHoleEl.style.left = target.left + 'px';
+  coachHoleEl.style.top = target.top + 'px';
+  coachHoleEl.style.width = target.width + 'px';
+  coachHoleEl.style.height = target.height + 'px';
+  const tipH = coachTipEl.offsetHeight || 220 * UI_SCALE;
+  let top = target.top + target.height + 12 * UI_SCALE;
+  if (top + tipH > innerHeight - 12) top = Math.max(12, target.top - tipH - 12 * UI_SCALE);
+  const left = Math.max(12, Math.min(innerWidth - tipW - 12, target.left + target.width / 2 - tipW / 2));
+  coachTipEl.style.left = left + 'px';
+  coachTipEl.style.top = top + 'px';
+  coachStepEl.textContent = `${coach.index + 1} / ${coach.steps.length}`;
+  coachTitleEl.textContent = step.title;
+  coachTextEl.textContent = step.text;
+  coachBackEl.style.visibility = coach.index ? 'visible' : 'hidden';
+  coachNextEl.textContent = coach.index === coach.steps.length - 1 ? 'DONE' : 'NEXT';
+}
+function coachShow(force = 0) {
+  if (!coachEl) return;
+  try { if (!force && localStorage.getItem('nc_coach_done') === '1') return; } catch (e) {}
+  coach.steps = coachSteps();
+  coach.index = 0;
+  coach.open = true;
+  coachEl.classList.remove('hidden');
+  coachPlace();
+}
+function coachHide(done) {
+  if (!coachEl) return;
+  coachEl.classList.add('hidden');
+  coach.open = false;
+  if (done) {
+    try { localStorage.setItem('nc_coach_done', '1'); } catch (e) {}
+  }
+}
+function coachNext() {
+  if (coach.index + 1 >= coach.steps.length) { coachHide(true); return; }
+  coach.index++;
+  coachPlace();
+}
+function coachBack() {
+  if (!coach.index) return;
+  coach.index--;
+  coachPlace();
 }
 function gestureHoldStart(x, y) {
   gesture.holdPoint = { x, y };
@@ -3010,6 +3285,15 @@ function gesturePointerCancel(e) {
 }
 if (gestureHelpEl) gestureHelpEl.addEventListener('click', () => gestureGuide(true));
 if (gestureGuideCloseEl) gestureGuideCloseEl.addEventListener('click', gestureHideGuide);
+if (nexusHudEl) nexusHudEl.addEventListener('click', () => { claimNexus(); renderNexus(); });
+const nexusClaimBtn = $('nexusClaim');
+if (nexusClaimBtn) nexusClaimBtn.addEventListener('click', () => { claimNexus(); renderNexusPanel(); });
+const nexusVerifyBtn = $('nexusVerify');
+if (nexusVerifyBtn) nexusVerifyBtn.addEventListener('click', () => verifyNexus());
+if (coachHelpEl) coachHelpEl.addEventListener('click', () => coachShow(1));
+if (coachNextEl) coachNextEl.addEventListener('click', coachNext);
+if (coachBackEl) coachBackEl.addEventListener('click', coachBack);
+if (coachSkipEl) coachSkipEl.addEventListener('click', () => coachHide(true));
 
 
 function lockPointer() {
@@ -3292,6 +3576,39 @@ const BUSINESSES = (Array.isArray(WORLD.businesses) ? WORLD.businesses : FALLBAC
     id: b.id, name: b.name || b.id, x: b.x, z: b.z, item: b.item || 'wheat',
     qty: b.qty | 0, sats: b.sats | 0, lat: b.lat, lon: b.lon, radius: b.radius || 300
   }));
+
+// **The Community Nexus is the CC-mined resource point.** It drips one sat per
+// real hour, published retained by `miner_hub.py`; the page only renders and
+// claims it. The two gather nodes are local replenishing resources: they make
+// the block loop and the market worth returning to without another photo.
+const NEXUS_NODE = {
+  id: 'nexus', name: 'Community Nexus', kind: 'nexus', item: 'sat', qty: 1, sats: 1,
+  x: 48.5, z: 35.0, lat: 33.8096, lon: -118.3547, radius: 300
+};
+const NEXUS_SHARD = 4;
+const NFT_PUBLIC_BASE = (WORLD.nftBase || 'https://ai.alex2006hw.com/nautilus/nft/').replace(/\/?$/, '/');
+const GATHER_NODES = [
+  { id: 'garden_plot', name: 'Garden Plot', kind: 'gather', item: 'wheat', qty: 2,
+    sats: 0, cooldown: 15 * 60 * 1000, x: 25.5, z: 30.5,
+    lat: 33.8096, lon: -118.3547, radius: 300 },
+  { id: 'market_crate', name: 'Market Crate', kind: 'gather', item: 'brick', qty: 1,
+    sats: 0, cooldown: 20 * 60 * 1000, x: 52.5, z: 33.0,
+    lat: 33.809, lon: -118.353, radius: 300 }
+];
+if (!BUSINESSES.some((b) => b.id === NEXUS_NODE.id)) BUSINESSES.push(NEXUS_NODE);
+for (const node of GATHER_NODES) {
+  if (!BUSINESSES.some((b) => b.id === node.id)) BUSINESSES.push(node);
+}
+if (!POIS.some((p) => p.name === NEXUS_NODE.name)) {
+  const poi = { name: NEXUS_NODE.name, x: NEXUS_NODE.x, y: GROUND + 6, z: NEXUS_NODE.z, cls: '' };
+  POIS.push(poi);
+  const el = document.createElement('div');
+  el.className = 'poi';
+  el.textContent = poi.name;
+  labelsEl.appendChild(el);
+  poiEls.push(el);
+}
+
 const TOKENS = (Array.isArray(WORLD.tokens) ? WORLD.tokens : FALLBACK_WORLD.tokens)
   .filter((t) => t && t.id && typeof t.x === 'number' && typeof t.z === 'number')
   .map((t) => ({ id: t.id, x: t.x, y: typeof t.y === 'number' ? t.y : GROUND + 2, z: t.z }));
@@ -3319,6 +3636,10 @@ const state = {
   mer: { faucets: 0, sinks: 0 },
   farmDay: '',
   farmed: [],
+  nodeAt: {},
+  nexusHour: 0,
+  nft: {},
+  shardWallets: {},
   placed: 0,
   broken: 0,
   started: 0,
@@ -3355,6 +3676,7 @@ function saveNow() {
       cohortStart: state.cohortStart, epochArchive: state.epochArchive,
       fog: state.fog, campaign: state.campaign, contracts: state.contracts, rep: state.rep, mer: state.mer,
       farmDay: state.farmDay, farmed: state.farmed, placed: state.placed, broken: state.broken,
+      nodeAt: state.nodeAt, nexusHour: state.nexusHour, nft: state.nft, shardWallets: state.shardWallets,
       started: state.started, finished: state.finished,
       focusCounts: state.focusCounts, orders: state.orders, pendingOrder: state.pendingOrder,
       verbose: state.verbose, lastReply: state.lastReply,
@@ -3399,6 +3721,10 @@ function loadSave() {
     state.mer = s.mer && typeof s.mer === 'object' ? s.mer : { faucets: 0, sinks: 0 };
     state.farmDay = typeof s.farmDay === 'number' ? s.farmDay : Number(s.farmDay) || 0;
     state.farmed = Array.isArray(s.farmed) ? s.farmed.filter((x) => typeof x === 'string') : [];
+    state.nodeAt = s.nodeAt && typeof s.nodeAt === 'object' ? s.nodeAt : {};
+    state.nexusHour = typeof s.nexusHour === 'number' ? s.nexusHour : 0;
+    state.nft = s.nft && typeof s.nft === 'object' ? s.nft : {};
+    state.shardWallets = s.shardWallets && typeof s.shardWallets === 'object' ? s.shardWallets : {};
     state.placed = s.placed | 0; state.broken = s.broken | 0;
     state.started = s.started | 0; state.finished = !!s.finished;
     state.focusCounts = s.focusCounts && typeof s.focusCounts === 'object' ? s.focusCounts : Object.create(null);
@@ -3448,6 +3774,7 @@ function collectTokens() {
     const d = Math.hypot(player.x - t.x, (player.y + 0.9) - t.y, player.z - t.z);
     if (d > 1.55) continue;
     state.tokens.push(t.id);
+    nftClaim(t.id);
     beep(880, 0.08, 'triangle', 0.025);
     setTimeout(() => beep(1320, 0.12, 'triangle', 0.02), 80);
     toast(`EMERALD TOKEN · ${tokenCount()} / ${TOKENS.length}`, 1800);
@@ -3622,10 +3949,28 @@ function updateNearNPC() {
     if (d < bizDist) { bizDist = d; biz = b; }
   }
   nearBiz = biz;
-  const canFarm = biz && !state.farmed.includes(biz.id) && helpEl.classList.contains('hidden');
+  let canFarm = false;
+  let farmLabel = biz ? biz.name : '';
+  if (biz && helpEl.classList.contains('hidden')) {
+    if (biz.kind === 'nexus') {
+      canFarm = nexusReady();
+      const n = nexusCurrent();
+      farmLabel = canFarm
+        ? `COMMUNITY NEXUS · ${n.amount | 0} SAT READY`
+        : 'COMMUNITY NEXUS · WAITING FOR THE NEXT HOUR';
+    } else if (biz.kind === 'gather') {
+      canFarm = gatherReady(biz);
+      farmLabel = canFarm
+        ? `${biz.name.toUpperCase()} · +${biz.qty | 0} ${String(biz.item).toUpperCase()}`
+        : `${biz.name.toUpperCase()} · RECHARGING`;
+    } else {
+      canFarm = !state.farmed.includes(biz.id);
+      farmLabel = biz.name;
+    }
+  }
   if (canFarm) {
     farmEl.classList.remove('hidden');
-    farmNameEl.textContent = biz.name;
+    farmNameEl.textContent = farmLabel;
   } else {
     farmEl.classList.add('hidden');
   }
@@ -3702,13 +4047,401 @@ function haversine(a, b, c, d) {
   const x = Math.sin((c - a) * p / 2) ** 2 + Math.cos(a * p) * Math.cos(c * p) * Math.sin((d - b) * p / 2) ** 2;
   return 2 * r * Math.asin(Math.min(1, Math.sqrt(x)));
 }
+function nexusCurrent() {
+  const now = Date.now();
+  const hour = Math.floor(now / 3600000);
+  if (NET.nexus && (NET.nexus.hour | 0) === hour) return NET.nexus;
+  if (NET.connected) return null;
+  // **Solo still has the resource point.** Without a CC, the page mines the
+  // same hourly drip locally; the online path replaces it with the CC's
+  // retained, bagged-MMR drip.
+  return { hour, amount: 1, at: now, root: '', events: 0, miner: 'local', connected: 4 };
+}
+function nexusReady() {
+  const n = nexusCurrent();
+  if (!n) return false;
+  if (NET.connected && (n.connected | 0) < 4) return false;
+  return (state.nexusHour | 0) !== (n.hour | 0);
+}
+function nexusStatus() {
+  const n = nexusCurrent();
+  if (!n) return 'awaiting CC drip';
+  const linked = n.connected | 0 || (NET.connected ? 0 : 4);
+  if ((state.nexusHour | 0) === (n.hour | 0)) return `claimed · hour ${n.hour} · ${linked}/4 shards`;
+  return `${n.amount | 0} sat ready · hour ${n.hour} · ${linked}/4 shards`;
+}
+function claimNexus() {
+  const n = nexusCurrent();
+  if (!n) { toast('COMMUNITY NEXUS · WAITING FOR THE CC MINER', 2400); return false; }
+  if (NET.connected && (n.connected | 0) < 4) {
+    toast(`COMMUNITY NEXUS · CONNECTING ${n.connected | 0}/4 SHARDS`, 2600);
+    return false;
+  }
+  if ((state.nexusHour | 0) === (n.hour | 0)) { toast('COMMUNITY NEXUS · ALREADY COLLECTED THIS HOUR', 2400); return false; }
+  if (!(NET.connected && (n.connected | 0) >= 4) && farmDistance(NEXUS_NODE) > 4.2) {
+    toast('WALK TO THE COMMUNITY NEXUS FIRST', 2400); return false;
+  }
+  state.nexusHour = n.hour;
+  state.sats += n.amount | 0;
+  renderSats(); saveSoon(); renderStatus(); renderNexus();
+  beep(880, 0.08, 'triangle', 0.02);
+  setTimeout(() => beep(1320, 0.10, 'triangle', 0.018), 90);
+  toast(`COMMUNITY NEXUS · +${n.amount | 0} SAT · ${n.miner === 'command-center' ? 'CC MINED' : 'LOCAL'} · HOUR ${n.hour}`, 3600);
+  mqttPublish('nexus/claim', {
+    pid: NET.pid || 'solo', name: NET.name, hour: n.hour,
+    amount: n.amount | 0, at: Date.now()
+  }, 1, false);
+  return true;
+}
+function gatherReady(node) {
+  const last = state.nodeAt[node.id] | 0;
+  return Date.now() - last >= (node.cooldown | 0);
+}
+function claimGather(node) {
+  if (!node) return false;
+  if (farmDistance(node) > 4.2) { toast('WALK TO ' + node.name.toUpperCase() + ' FIRST', 2400); return false; }
+  if (!gatherReady(node)) {
+    const left = Math.ceil(((node.cooldown | 0) - (Date.now() - (state.nodeAt[node.id] | 0))) / 60000);
+    toast(`${node.name.toUpperCase()} · RECHARGES IN ${left}M`, 2200);
+    return false;
+  }
+  state.nodeAt[node.id] = Date.now();
+  const item = node.item || 'wheat';
+  const qty = node.qty | 0 || 1;
+  state.inventory[item] = (state.inventory[item] || 0) + qty;
+  saveSoon(); renderMarket();
+  beep(600, 0.06, 'triangle', 0.018);
+  toast(`GATHERED ${node.name.toUpperCase()} · +${qty} ${item.toUpperCase()}`, 2400);
+  mqttPublish('commerce/gather', {
+    id: node.id, name: node.name, item, qty, pid: NET.pid || 'solo', at: Date.now()
+  }, 1, false);
+  return true;
+}
 function beginClaim(b) {
   if (!b) return;
+  if (b.kind === 'nexus') { claimNexus(); return; }
+  if (b.kind === 'gather') { claimGather(b); return; }
   const coach = photoCoach(b);
   if (coach) { toast(coach.toUpperCase(), 3600); return; }
   pendingClaim = b;
   photoInput.value = '';
   photoInput.click();
+}
+
+// ------------------------------------------------------- Nexus NFTs + transit --
+// **The NFT is a BTC testnet child wallet with a 100 sat stake.** The private
+// key stays in the player's Vault-derived child wallet; the page records the
+// watch-only child address, the parent and the stake. The CC miner commits the
+// owner/wallet/price to the global bagged-MMR ledger, and the metadata is
+// ERC-721/OpenSea-shaped so an internet marketplace can read it.
+const BECH32 = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+const BECH32_GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+function bech32Polymod(values) {
+  let chk = 1;
+  for (const value of values) {
+    const top = chk >> 25;
+    chk = ((chk & 0x1ffffff) << 5) ^ value;
+    for (let i = 0; i < 5; i++) if ((top >> i) & 1) chk ^= BECH32_GEN[i];
+  }
+  return chk;
+}
+function bech32HrpExpand(hrp) {
+  const out = [];
+  for (const c of hrp) out.push(c.charCodeAt(0) >> 5);
+  out.push(0);
+  for (const c of hrp) out.push(c.charCodeAt(0) & 31);
+  return out;
+}
+function bech32Checksum(hrp, data) {
+  const values = bech32HrpExpand(hrp).concat(data).concat([0, 0, 0, 0, 0, 0]);
+  const mod = bech32Polymod(values) ^ 1;
+  const out = [];
+  for (let i = 0; i < 6; i++) out.push((mod >> (5 * (5 - i))) & 31);
+  return out;
+}
+function bech32Encode(hrp, data) {
+  return hrp + '1' + data.concat(bech32Checksum(hrp, data)).map((d) => BECH32[d]).join('');
+}
+function to5bit(bytes) {
+  let acc = 0, bits = 0;
+  const out = [];
+  for (const byte of bytes) {
+    acc = (acc << 8) | byte; bits += 8;
+    while (bits >= 5) { bits -= 5; out.push((acc >> bits) & 31); }
+  }
+  if (bits) out.push((acc << (5 - bits)) & 31);
+  return out;
+}
+function nftWallet(id) {
+  const parent = (NET.accounts.get(NET.pid) || {}).address || NET.pid || 'solo';
+  const index = Math.max(1, TOKENS.findIndex((t) => t.id === id) + 1);
+  const seed = new TextEncoder().encode(`nft-child|${parent}|${id}|${index}`);
+  const h = sha256Bytes(seed).slice(0, 20);
+  return {
+    kind: 'btc-child-wallet', network: 'testnet', parent,
+    childIndex: index, address: bech32Encode('tb', [0].concat(to5bit(h))),
+    stakeSats: 100, custody: 'vault-child'
+  };
+}
+function nftItem(id) { return NET.nft[id] || state.nft[id] || null; }
+function nftLabel(id) {
+  return String(id).split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+function nftMetadata(id) {
+  const item = nftItem(id) || {};
+  const wallet = item.wallet || nftWallet(id);
+  const token = TOKENS.find((t) => t.id === id) || {};
+  const metadata = {
+    name: `Torrance Emerald Token — ${nftLabel(id)}`,
+    description: 'A one-of-one Nautilus Craft landmark token. The NFT is a Bitcoin testnet child wallet with a 100 sat stake; the private key stays in the player Vault child wallet.',
+    image: (window.__SPRITES__ && window.__SPRITES__.token) || '',
+    external_url: NFT_PUBLIC_BASE + id,
+    attributes: [
+      { trait_type: 'Landmark', value: nftLabel(id) },
+      { trait_type: 'Shard', value: `S${(token.x !== undefined ? shardAt(token.x, token.z) : 0) + 1}` },
+      { trait_type: 'Edition', value: '1/1' },
+      { trait_type: 'Network', value: 'Bitcoin testnet' },
+      { trait_type: 'Stake', value: 100, display_type: 'number', max_value: 100 },
+      { trait_type: 'Child wallet', value: wallet.address }
+    ],
+    properties: {
+      tokenId: id, standard: 'ERC-721', game: 'Nautilus Craft',
+      network: 'testnet', wallet: wallet.address, parentWallet: wallet.parent,
+      childIndex: wallet.childIndex, stakeSats: 100, custody: wallet.custody
+    }
+  };
+  return { tokenURI: NFT_PUBLIC_BASE + id + '.json', metadata };
+}
+function nftClaim(id) {
+  const existing = nftItem(id);
+  if (existing && existing.owner) return false;
+  const wallet = nftWallet(id);
+  const item = {
+    id, owner: NET.pid || 'solo', creator: NET.pid || 'solo',
+    name: nftLabel(id), price: 0, at: Date.now(), standard: 'ERC-721',
+    stakeSats: 100, wallet
+  };
+  NET.nft[id] = item;
+  state.nft[id] = item;
+  saveSoon();
+  mqttPublish('nexus/nft/claim', {
+    pid: item.owner, id, name: item.name, wallet, at: item.at
+  }, 1, false);
+  beep(720, 0.06, 'triangle', 0.02);
+  toast(`NFT MINTED · ${item.name.toUpperCase()} · 100 SAT CHILD WALLET`, 3000);
+  renderNexus();
+  return true;
+}
+function listNft(id, price) {
+  const item = nftItem(id);
+  if (!item || item.owner !== (NET.pid || 'solo')) { toast('YOU DO NOT OWN THAT NFT', 2000); return false; }
+  item.price = Math.max(0, price | 0);
+  NET.nft[id] = item;
+  state.nft[id] = item;
+  saveSoon();
+  mqttPublish('nexus/nft/list', { pid: NET.pid, id, price: item.price, at: Date.now() }, 1, false);
+  renderNexus();
+  return true;
+}
+function buyNft(id) {
+  const item = nftItem(id);
+  if (!item || !item.price || item.owner === NET.pid) return false;
+  const price = item.price | 0;
+  const fee = 20;
+  if (state.credits < price) { toast('NOT ENOUGH CREDITS FOR THE NFT', 2200); return false; }
+  if (state.sats < fee) { toast(`NFT TRANSFER NEEDS ${fee} SATS (5+5+5+5)`, 2600); return false; }
+  const seller = item.owner;
+  const creator = item.creator || seller;
+  state.credits -= price;
+  state.sats -= fee;
+  state.tokens.push(id);
+  item.owner = NET.pid;
+  item.price = 0;
+  item.lastTrade = { seller, buyer: NET.pid, price, fee, creator, at: Date.now() };
+  NET.nft[id] = item;
+  state.nft[id] = item;
+  saveSoon(); renderSats(); renderCredits(); renderNexus();
+  mqttPublish('nexus/nft/buy', { pid: NET.pid, id, price, at: Date.now() }, 1, false);
+  toast(`NFT TRANSFER · ${nftLabel(id).toUpperCase()} · ${price} CR + ${fee} SAT FEE`, 3600);
+  return true;
+}
+// A new shard starts with a user wallet. These phrases are a demo recovery
+// phrase (12 words from a fixed list), not BIP39; the address is a watch-only
+// testnet commitment. A real shard mnemonic can be imported instead.
+const SHARD_WORDS = ['amber','anchor','apple','atlas','beacon','birch','brick','canyon','cedar','cloud','coast','comet','copper','coral','crane','dawn','delta','dune','eagle','ember','falcon','fern','field','flint','forest','fox','garden','glade','glass','gold','granite','harbor','hazel','hedge','island','ivory','jade','juniper','kite','lake','lantern','leaf','lime','maple','meadow','mesa','mist','moon','moss','oak','ocean','olive','onyx','orbit','pearl','pine','plaza','quartz','rain','reef','river','sage','sand','shore','silver','sky','solar','spruce','star','stone','storm','sun','surf','thyme','tide','topaz','trail','valley','violet','wave','willow','wind','yarrow','zephyr'];
+function shardPhrase() {
+  const bytes = new Uint32Array(12);
+  (window.crypto || window.msCrypto).getRandomValues(bytes);
+  return [...bytes].map((n) => SHARD_WORDS[n % SHARD_WORDS.length]).join(' ');
+}
+function shardAddress(phrase) {
+  const h = sha256Bytes(new TextEncoder().encode('shard-wallet|' + phrase)).slice(0, 20);
+  return bech32Encode('tb', [0].concat(to5bit(h)));
+}
+function ensureShardWallet(shard) {
+  const key = String(shard | 0);
+  if (state.shardWallets[key]) return state.shardWallets[key];
+  const phrase = shardPhrase();
+  const wallet = { shard: shard | 0, phrase, address: shardAddress(phrase),
+                   network: 'testnet', custody: 'demo-watch-only', at: Date.now() };
+  state.shardWallets[key] = wallet;
+  saveSoon(); renderNexus();
+  toast(`SHARD S${(shard | 0) + 1} WALLET CREATED · NEXUS → SHOW PHRASE`, 3600);
+  return wallet;
+}
+function importShardWallet() {
+  const shard = shardAt(player.x, player.z);
+  const phrase = (window.prompt('Paste the shard recovery phrase to claim this shard wallet:') || '').trim();
+  if (!phrase) return false;
+  state.shardWallets[String(shard)] = {
+    shard, phrase, address: shardAddress(phrase), network: 'testnet',
+    custody: 'imported-watch-only', at: Date.now()
+  };
+  saveSoon(); renderNexus();
+  toast(`SHARD S${(shard | 0) + 1} WALLET CLAIMED · ${shardAddress(phrase).slice(0, 16)}…`, 3000);
+  return true;
+}
+function showShardPhrase() {
+  const shard = shardAt(player.x, player.z);
+  const wallet = ensureShardWallet(shard);
+  window.prompt('Copy this shard recovery phrase and keep it offline:', wallet.phrase);
+}
+function applyNftState(items) {
+  if (!items || typeof items !== 'object') return;
+  for (const [id, item] of Object.entries(items)) {
+    const before = NET.nft[id] || {};
+    const trade = item.lastTrade;
+    if (trade && trade.at !== (before.lastTrade || {}).at) {
+      const key = `${id}|${trade.at}`;
+      if (!state.nftSettled) state.nftSettled = [];
+      if (!state.nftSettled.includes(key)) {
+        state.nftSettled.push(key);
+        if (state.nftSettled.length > 64) state.nftSettled.shift();
+        if (trade.seller === NET.pid) {
+          state.credits += trade.price | 0;
+          state.tokens = state.tokens.filter((t) => t !== id);
+          toast(`NFT SOLD · +${trade.price | 0} CREDITS`, 2600);
+        }
+        if (trade.creator === NET.pid) {
+          state.sats += 5;
+          toast('NFT CREATOR ROYALTY · +5 SATS', 2200);
+        }
+        if (item.owner === NET.pid && !state.tokens.includes(id)) state.tokens.push(id);
+        saveSoon(); renderSats(); renderCredits(); renderTokens();
+      }
+    }
+    NET.nft[id] = item;
+    state.nft[id] = item;
+  }
+  renderNexus();
+}
+function transitToShard(n) {
+  const linked = NET.connected ? ((NET.nexus || {}).connected | 0) : 4;
+  if (NET.connected && linked < 4) { toast(`NEXUS LINKED ${linked}/4 SHARDS`, 2400); return false; }
+  const target = ((n | 0) % SHARD_COUNT + SHARD_COUNT) % SHARD_COUNT;
+  const from = shardAt(player.x, player.z);
+  if (target === from) { toast('ALREADY IN S' + (target + 1), 1800); return false; }
+  const c = shardCenter(target);
+  player.x = c[0] + 0.5; player.z = c[1] + 0.5;
+  player.y = GROUND + 1; player.vy = 0;
+  closePanels();
+  beep(520, 0.08, 'sine', 0.02);
+  toast(`NEXUS TRANSIT · S${from + 1} → S${target + 1}`, 2600);
+  mqttPublish('nexus/transit', { pid: NET.pid || 'solo', from, to: target, at: Date.now() }, 1, false);
+  return true;
+}
+function renderNexusPanel() {
+  const shardsEl = $('nexusShards'), goalEl = $('nexusGoal'), claimEl = $('nexusClaim');
+  const transitEl = $('nexusTransits'), nftEl = $('nexusNft');
+  if (!shardsEl || !nftEl) return;
+  const n = NET.nexus || nexusCurrent() || {};
+  const linked = n.connected | 0 || (NET.connected ? 0 : 4);
+  const pools = n.pools || {};
+  if (goalEl) {
+    const b = NET.block;
+    const block = b ? ` · block #${b.height | 0} ${String(b.blockAddress || '').slice(0, 12)} · nonce ${String(b.nonce || '').slice(0, 6)}` : '';
+    const g = NET.global;
+    const global = g ? ` · global #${g.height | 0} ${String(g.root || '').slice(0, 10)}` : '';
+    goalEl.textContent = `${n.miner === 'command-center' ? 'CC MINED' : 'LOCAL'} · ${linked}/4 SHARDS · ${nexusStatus()} · pools M${pools.miners | 0} G${pools.genesis | 0} C${pools.creator | 0} D${pools.drip | 0}${block}${global}`;
+  }
+  shardsEl.textContent = '';
+  for (let i = 0; i < SHARD_COUNT; i++) {
+    const s = (n.shards || {})[String(i)] || {};
+    shardsEl.appendChild(statusRow(`NEXUS S${i + 1}`,
+      s.height ? `h${s.height | 0} · ${String(s.root || '').slice(0, 12)}` : 'waiting for a shard tip'));
+  }
+  const lastTrade = Object.values(NET.nft || {}).find((item) => item && item.lastTrade);
+  if (lastTrade) {
+    const t = lastTrade.lastTrade;
+    shardsEl.appendChild(statusRow('LAST NFT FEE',
+      `${t.fee | 0} SAT · ${t.split ? `M${t.split.miners} G${t.split.genesis} C${t.split.creator} D${t.split.drip}` : '5+5+5+5'} · buyer paid ${t.price | 0} CR`));
+  }
+  const currentShard = shardAt(player.x, player.z);
+  const shardWallet = state.shardWallets[String(currentShard)] || ensureShardWallet(currentShard);
+  const walletRow = document.createElement('div');
+  walletRow.className = 'item';
+  const walletLeft = document.createElement('div');
+  const walletName = document.createElement('b');
+  walletName.textContent = `S${currentShard + 1} USER WALLET`;
+  const walletSmall = document.createElement('small');
+  walletSmall.textContent = `${shardWallet.address} · ${shardWallet.custody}`;
+  walletLeft.append(walletName, walletSmall);
+  const show = document.createElement('button');
+  show.textContent = 'SHOW PHRASE';
+  show.addEventListener('click', showShardPhrase);
+  const claim = document.createElement('button');
+  claim.textContent = 'IMPORT';
+  claim.addEventListener('click', () => { importShardWallet(); renderNexusPanel(); });
+  walletRow.append(walletLeft, show, claim);
+  shardsEl.appendChild(walletRow);
+  if (claimEl) {
+    claimEl.textContent = nexusReady() ? `CLAIM ${n.amount | 0} SAT` : 'CLAIMED / WAITING';
+    claimEl.disabled = !nexusReady();
+  }
+  if (transitEl) {
+    transitEl.textContent = '';
+    for (let i = 0; i < SHARD_COUNT; i++) {
+      const b = document.createElement('button');
+      b.textContent = `S${i + 1}`;
+      b.disabled = NET.connected && linked < 4;
+      b.addEventListener('click', () => transitToShard(i));
+      transitEl.appendChild(b);
+    }
+  }
+  nftEl.textContent = '';
+  for (const t of TOKENS) {
+    const item = nftItem(t.id);
+    const owner = item && item.owner;
+    const price = item ? item.price | 0 : 0;
+    const row = document.createElement('div');
+    row.className = 'item';
+    const left = document.createElement('div');
+    const b = document.createElement('b');
+    b.textContent = `EMERALD · ${nftLabel(t.id).toUpperCase()}`;
+    const small = document.createElement('small');
+    small.textContent = item
+      ? `${owner} · ${item.wallet ? String(item.wallet.address).slice(0, 16) + '…' : 'no wallet'} · 100 SAT STAKE${price ? ' · ' + price + ' CR' : ''}`
+      : 'unminted · 100 sat child wallet';
+    left.append(b, small);
+    row.appendChild(left);
+    if (!owner && state.tokens.includes(t.id)) {
+      const mint = document.createElement('button');
+      mint.textContent = 'MINT NFT';
+      mint.addEventListener('click', () => { nftClaim(t.id); renderNexusPanel(); });
+      row.appendChild(mint);
+    } else if (owner === NET.pid) {
+      const list = document.createElement('button');
+      list.textContent = price ? 'UNLIST' : 'LIST 50';
+      list.addEventListener('click', () => { listNft(t.id, price ? 0 : 50); renderNexusPanel(); });
+      row.appendChild(list);
+    } else if (owner && price) {
+      const buy = document.createElement('button');
+      buy.textContent = `BUY ${price} CR +20 SAT`;
+      buy.addEventListener('click', () => { buyNft(t.id); renderNexusPanel(); });
+      row.appendChild(buy);
+    }
+    nftEl.appendChild(row);
+  }
 }
 async function handlePhoto(file) {
   const b = pendingClaim;
@@ -3842,13 +4575,19 @@ function wouldHitPlayer(x, y, z) {
 }
 function breakBlock() {
   if (!target) return;
-  if (getB(target.x, target.y, target.z) === AIR) return;
+  const brokenId = getB(target.x, target.y, target.z);
+  if (brokenId === AIR) return;
   setB(target.x, target.y, target.z, AIR);
   sendBlockEdit(target.x, target.y, target.z, AIR);
   state.broken++;
+  const item = String((DEF[brokenId] && DEF[brokenId].name) || 'block').toLowerCase();
+  state.inventory[item] = (state.inventory[item] | 0) + 1;
   edits.set(`${target.x},${target.y},${target.z}`, AIR);
   if (edits.size > 6000) { const first = edits.keys().next().value; edits.delete(first); }
   beep(150 + Math.random() * 40, 0.05, 'square', 0.016);
+  if (state.broken === 1 || state.broken % 10 === 0) {
+    toast(`GATHERED ${item.toUpperCase()} · SELL IN MARKET`, 1800);
+  }
   checkQuests(); renderQuests(); saveSoon();
 }
 function placeBlock() {
@@ -3891,12 +4630,13 @@ const NET = {
   enabled: false, client: null, connected: false, pid: null,
   name: '', color: 0, players: new Map(), scores: new Map(),
   lastPos: 0, retry: 0, anchor: null, revision: 0, chatHideTimer: 0,
-  accounts: new Map(), sides: new Map(), pvp: new Map()
+  accounts: new Map(), sides: new Map(), pvp: new Map(), nexus: null, nft: {}, block: null, global: null
 };
 const MQTT_BASE = 'wa/v1/c2/torrance';
 const MQTT_FILTERS = [
   'player/+/presence', 'player/+/pos', 'player/+/chat', 'player/+/score',
-  'npc/+/state', 'map/state', 'map/block', 'ledger/anchor', 'ledger/side/+', 'player/+/account', 'pvp/+/state', 'pvp/+/hit', 'pvp/+/downed', 'pvp/feed', 'game/action'
+  'npc/+/state', 'map/state', 'map/block', 'ledger/anchor', 'ledger/side/+', 'player/+/account', 'pvp/+/state', 'pvp/+/hit', 'pvp/+/downed', 'pvp/feed', 'game/action',
+  'nexus/drip', 'nexus/state', 'nexus/connect', 'nexus/claim', 'nexus/nft/+', 'nexus/transit', 'nexus/block'
 ];
 const PLAYER_COLORS = ['#f4c95d', '#8fd14f', '#7fc4ff', '#ff8f6b', '#c99cff', '#5be0c8', '#ff7fb0', '#d7dde0'];
 
@@ -3942,13 +4682,20 @@ function publishPresence() {
   }, 1, true);
   mqttPublish('player/' + NET.pid + '/score', { quests: questCount(), tokens: tokenCount(), at: Date.now() }, 1, true);
 }
+function globalCheckpoint() {
+  return NET.global
+    ? { height: NET.global.height | 0, root: NET.global.root || '', head: NET.global.head || '' }
+    : null;
+}
 netSendScore = function () {
   if (NET.connected) {
-    mqttPublish('player/' + NET.pid + '/score', { quests: questCount(), tokens: tokenCount(), at: Date.now() }, 1, true);
+    mqttPublish('player/' + NET.pid + '/score',
+      { quests: questCount(), tokens: tokenCount(), global: globalCheckpoint(), at: Date.now() }, 1, true);
   }
 };
 function sendBlockEdit(x, y, z, id) {
-  if (NET.connected) mqttPublish('map/block', { x, y, z, id, by: NET.pid, at: Date.now() }, 1, false);
+  if (NET.connected) mqttPublish('map/block',
+    { x, y, z, id, by: NET.pid, global: globalCheckpoint(), at: Date.now() }, 1, false);
 }
 function sendChat(text) {
   if (!NET.connected) return;
@@ -4100,6 +4847,23 @@ function renderAnchor() {
   const roots = Array.isArray(a.roots) ? a.roots.length : 0;
   el.textContent = '#' + (a.height === undefined ? '?' : a.height) + ' · ' + roots + ' shards';
 }
+function renderNexus() {
+  const n = nexusCurrent();
+  const ready = nexusReady();
+  const linked = n ? (n.connected | 0) || (NET.connected ? 0 : 4) : 0;
+  if (nexusHudEl) {
+    nexusHudEl.classList.toggle('hidden', !n);
+    nexusHudEl.textContent = ready
+      ? `COMMUNITY NEXUS · ${n.amount | 0} SAT · ${linked}/4 SHARDS · TAP TO COLLECT`
+      : `COMMUNITY NEXUS · ${linked}/4 SHARDS · WAITING`;
+  }
+  const status = $('status');
+  if (status && !status.classList.contains('hidden')) renderStatus();
+  const market = $('market');
+  if (market && !market.classList.contains('hidden')) renderMarket();
+  const panel = $('nexus');
+  if (panel && !panel.classList.contains('hidden')) renderNexusPanel();
+}
 
 // --- light-client verification: player MMR -> shard MMR -> anchor -------
 const SHA_K = [
@@ -4200,14 +4964,42 @@ function verifyPlayer(pid) {
   toast('✓ ' + pid + ' VERIFIED · anchor #' + anchor.height + ' · shard ' + shard, 3200);
   return true;
 }
+function verifyNexus() {
+  const n = NET.nexus;
+  if (!n || !Array.isArray(n.leaves) || !n.root) {
+    toast('✗ NEXUS STATE NOT SEEN', 2400); return false;
+  }
+  const root = mmrRoot(n.leaves);
+  if (root !== n.root) { toast('✗ NEXUS MMR ROOT', 2400); return false; }
+  const anchor = NET.anchor;
+  const ar = anchor && Array.isArray(anchor.roots)
+    ? anchor.roots.find((r) => (r.shard | 0) === NEXUS_SHARD) : null;
+  if (!ar) { toast('✗ NEXUS NOT IN ANCHOR', 2400); return false; }
+  if (ar.root !== root || (ar.height | 0) !== (n.events | 0)) {
+    toast('… NEXUS ANCHOR PENDING · height ' + (ar.height | 0), 2600); return false;
+  }
+  toast('✓ COMMUNITY NEXUS VERIFIED · ' + (n.events | 0) + ' leaves · ' + String(root).slice(0, 12), 3600);
+  return true;
+}
 function handleTopicMessage(topic, bytes, retained) {
-  const parts = topic.split('/');
-  // wa / v1 / c2 / torrance / <kind> / ...
-  if (parts.length < 5 || parts[3] !== 'torrance') return;
   let text = '';
   try { text = new TextDecoder().decode(bytes || new Uint8Array(0)); } catch (e) { return; }
   let data = null;
   if (text) { try { data = JSON.parse(text); } catch (e) { console.warn('bad json', topic, text.length); return; } }
+  // **The global chain checkpoint rides with every shard state update.** The
+  // page subscribes to the CC's global ledger head even though the game topics
+  // live under wa/v1/c2/torrance.
+  if (topic === 'swarm/global/coord/ledger') {
+    if (data && data.type === 'ledger_update') {
+      NET.global = { head: data.head || '', height: data.length | 0,
+                     root: data.root || '', at: Date.now() };
+      renderNexus();
+    }
+    return;
+  }
+  const parts = topic.split('/');
+  // wa / v1 / c2 / torrance / <kind> / ...
+  if (parts.length < 5 || parts[3] !== 'torrance') return;
   if (parts[4] === 'player' && parts[5] && parts[6]) {
     const pid = parts[5], kind = parts[6];
     if (pid === NET.pid && kind === 'chat') {
@@ -4261,6 +5053,43 @@ function handleTopicMessage(topic, bytes, retained) {
     renderOnline();
     return;
   }
+  if (parts[4] === 'nexus' && data) {
+    if (parts[5] === 'block') {
+      NET.block = data;
+      NET.nexus = NET.nexus || {};
+      NET.nexus.pools = { ...(NET.nexus.pools || {}), ...(data.pools || {}) };
+    } else if (parts[5] === 'drip') {
+      NET.nexus = { ...(NET.nexus || {}), ...data, claims: (NET.nexus || {}).claims || {} };
+    } else if (parts[5] === 'state') {
+      NET.nexus = { ...(NET.nexus || {}), ...data, claims: data.claims || (NET.nexus || {}).claims || {} };
+    } else if (parts[5] === 'connect') {
+      NET.nexus = { ...(NET.nexus || {}), ...data, shards: data.roots || (NET.nexus || {}).shards || {} };
+    } else if (parts[5] === 'claim') {
+      const pid = data.pid || '';
+      if (pid) {
+        NET.nexus = NET.nexus || {};
+        NET.nexus.claims = NET.nexus.claims || {};
+        NET.nexus.claims[pid] = data;
+      }
+    } else if (parts[5] === 'nft' && parts[6] === 'state') {
+      applyNftState(data.nft || data.items || {});
+    } else if (parts[5] === 'nft' && parts[6] === 'trade') {
+      const key = `${data.id}|${data.at}`;
+      if (!state.nftSettled) state.nftSettled = [];
+      if (!state.nftSettled.includes(key)) {
+        state.nftSettled.push(key);
+        if (state.nftSettled.length > 64) state.nftSettled.shift();
+        if (data.seller === NET.pid) {
+          state.credits += data.price | 0;
+          state.tokens = state.tokens.filter((t) => t !== data.id);
+        }
+        if (data.creator === NET.pid) state.sats += 5;
+        saveSoon(); renderSats(); renderCredits(); renderTokens();
+      }
+    }
+    renderNexus();
+    return;
+  }
   if (parts[4] === 'ledger' && parts[5] === 'side' && data) {
     const shard = Number(parts[6]);
     if (Number.isFinite(shard)) NET.sides.set(shard, data);
@@ -4297,6 +5126,7 @@ function connectNet() {
     onConnect: () => {
       NET.connected = true;
       client.subscribe(MQTT_FILTERS.map((topic) => ({ topic: MQTT_BASE + '/' + topic, qos: 1 })));
+      client.subscribe([{ topic: 'swarm/global/coord/ledger', qos: 1 }]);
       publishPresence();
       renderOnline();
       appendChat('', 'MQTT v5 connected · ' + location.host, false, true);
@@ -4609,6 +5439,7 @@ function updateLabels() {
 
 // --------------------------------------------------------------------- loop --
 let last = performance.now(), acc = 0, frames = 0, fpsTimer = 0, started = false;
+let lastShard = -1;
 let bobT = 0;
 
 function physics(dt) {
@@ -4712,6 +5543,10 @@ function frame(now) {
   }
   renderShards();
   renderEpoch();
+  if (started) {
+    const shard = shardAt(player.x, player.z);
+    if (shard !== lastShard) { lastShard = shard; ensureShardWallet(shard); }
+  }
   if (started) revealChunks();
 
   npcAI(now);
@@ -4957,6 +5792,10 @@ function resetWorld() {
   state.mer = { faucets: 0, sinks: 0 };
   state.farmDay = '';
   state.farmed = [];
+  state.nodeAt = {};
+  state.nexusHour = 0;
+  state.nft = {};
+  state.shardWallets = {};
   state.placed = 0; state.broken = 0; state.started = 0; state.finished = false;
   genWorld();
   for (let i = 0; i < CX * CZ; i++) remesh(i);
@@ -4992,7 +5831,13 @@ function startGame() {
     started = true;
     showHint(IS_TOUCH ? 'Left thumb moves · right thumb looks' : 'Click to capture the mouse');
   }
-  if (GESTURE_NAV) setTimeout(() => gestureGuide(false), 800);
+  setTimeout(() => {
+    if (GESTURE_NAV) {
+      if (!gestureGuide(false)) maybeCoach();
+    } else {
+      maybeCoach();
+    }
+  }, 900);
   NET.name = sanitizeName(playerNameEl ? playerNameEl.value : NET.name);
   try { if (store) store.setItem('nc_name', NET.name); } catch (e) {}
   connectNet();
@@ -5010,6 +5855,7 @@ genWorld();
 loadSave();
 if (playerCollides()) resetPosition();
 initUI();
+renderNexus();
 resize();
 requestAnimationFrame(frame);
 
@@ -5162,12 +6008,32 @@ function renderCitizens() {
 }
 
 // ------------------------------------------------------------- market UI ---
+const RESOURCE_PRICES = {
+  dirt: 1, grass: 1, soil: 1, hedge: 1, path: 1, plaza: 1,
+  stone: 2, sand: 1, planks: 3, log: 3, leaves: 1, brick: 4,
+  glass: 2, wheat: 5, carrot: 5, coffee: 8, token: 25
+};
 function marketPrice(b) { return Math.max(6, Math.round((b.sats || 60) / 8)); }
 function renderMarket() {
   const list = $('mktList');
   if (!list) return;
   list.textContent = '';
+  const nexus = document.createElement('div');
+  nexus.className = 'item';
+  const nleft = document.createElement('div');
+  const nb = document.createElement('b');
+  nb.textContent = 'COMMUNITY NEXUS';
+  const ns = document.createElement('small');
+  ns.textContent = `${nexusStatus()} · claim at spawn`;
+  nleft.append(nb, ns);
+  const claim = document.createElement('button');
+  claim.textContent = 'CLAIM 1 SAT';
+  claim.addEventListener('click', () => claimNexus());
+  nexus.append(nleft, claim);
+  list.appendChild(nexus);
+
   for (const b of BUSINESSES) {
+    if (b.kind === 'nexus' || b.kind === 'gather') continue;
     const price = marketPrice(b);
     const row = document.createElement('div');
     row.className = 'item';
@@ -5200,6 +6066,45 @@ function renderMarket() {
     row.append(left, buy, sell);
     list.appendChild(row);
   }
+
+  // **Gathering feeds commerce.** Every block break and gather node can be
+  // sold here; the board shows the price and the quantity so the player can
+  // decide whether to keep building or sell.
+  let credits = 0, count = 0;
+  const priced = [];
+  for (const [item, price] of Object.entries(RESOURCE_PRICES)) {
+    const have = state.inventory[item] | 0;
+    if (!have) continue;
+    const value = Math.round(price * 0.95);
+    credits += value * have;
+    count += have;
+    priced.push(`${have}×${item} @ ${value}`);
+  }
+  const board = document.createElement('div');
+  board.className = 'item';
+  const bleft = document.createElement('div');
+  const bb = document.createElement('b');
+  bb.textContent = 'RESOURCE BOARD';
+  const bs = document.createElement('small');
+  bs.textContent = priced.length ? `${priced.slice(0, 6).join(' · ')}${priced.length > 6 ? ' · …' : ''} · sell all ${credits} cr` : 'break blocks or gather at the Garden Plot / Market Crate';
+  bleft.append(bb, bs);
+  const sellAll = document.createElement('button');
+  sellAll.textContent = 'SELL ALL';
+  sellAll.addEventListener('click', () => {
+    if (!count) { toast('NO RESOURCES TO SELL', 1800); return; }
+    for (const [item, price] of Object.entries(RESOURCE_PRICES)) {
+      const have = state.inventory[item] | 0;
+      if (!have) continue;
+      state.inventory[item] = 0;
+      state.credits += Math.round(price * 0.95) * have;
+    }
+    merAdd(credits, 0); campaignAdd('trade', credits);
+    renderCredits(); renderMarket(); saveSoon();
+    mqttPublish('commerce/sell', { pid: NET.pid || 'solo', credits, count, at: Date.now() }, 1, false);
+    toast(`SOLD ${count} RESOURCES · +${credits} CREDITS`, 3200);
+  });
+  board.append(bleft, sellAll);
+  list.appendChild(board);
 }
 
 // --------------------------------------------------------- relations UI ----
@@ -5357,7 +6262,7 @@ function renderCampaign() {
 }
 
 // -------------------------------------------------------- voice + panels ---
-const PANELS = ['status', 'pvp', 'citizens', 'market', 'diplomacy', 'campaign'];
+const PANELS = ['status', 'pvp', 'citizens', 'market', 'nexus', 'diplomacy', 'campaign'];
 function openPanel(id) {
   for (const p of PANELS) {
     const el = $(p);
@@ -5370,6 +6275,7 @@ function openPanel(id) {
   if (id === 'pvp') renderPvP();
   if (id === 'citizens') renderCitizens();
   if (id === 'market') renderMarket();
+  if (id === 'nexus') renderNexusPanel();
   if (id === 'diplomacy') renderDiplomacy();
   if (id === 'campaign') renderCampaign();
   syncCampaignMenu();
@@ -5407,6 +6313,12 @@ function renderStatus() {
     ['Sats', String(state.sats)],
     ['Credits', String(state.credits)],
     ['Game day', String(gameDay())],
+    ['Nexus', nexusStatus()],
+    ['Nexus MMR', NET.nexus && NET.nexus.root ? String(NET.nexus.root).slice(0, 16) : '—'],
+    ['Nexus shards', `${(NET.nexus || {}).connected | 0}/4 · ${Object.keys((NET.nexus || {}).shards || {}).length} roots`],
+    ['Pools', (() => { const p = (NET.nexus || {}).pools || {}; return `M${p.miners | 0} G${p.genesis | 0} C${p.creator | 0} D${p.drip | 0}`; })()],
+    ['Block reward', NET.block ? `#${NET.block.height | 0} · ${NET.block.totalSats | 0} SAT · ${String(NET.block.blockAddress || '').slice(0, 12)}` : '—'],
+    ['Global chain', NET.global ? `#${NET.global.height | 0} · ${String(NET.global.root || '').slice(0, 12)}` : 'not seen'],
     ['Epoch', `${state.epoch} · D${epochDay()} · C${state.epochCohort}`],
     ['Shards', `${countBits(state.shards)} / ${SHARD_COUNT}`],
     ['Anchor', NET.anchor ? String(NET.anchor.hash || 'pending').slice(0, 16) : '—'],
@@ -5729,6 +6641,18 @@ async function runGameAction(action, args) {
     render: renderInfo(),
     gestures: GESTURE_NAV ? { ...gesture.stats, fov: viewFov,
                               fly: player.fly, selected } : null,
+    nexus: (() => {
+      const n = nexusCurrent();
+      return n ? { hour: n.hour, amount: n.amount | 0,
+                   ready: nexusReady(), claimed: (state.nexusHour | 0) === (n.hour | 0),
+                   root: n.root || '', events: n.events | 0, miner: n.miner || 'local',
+                   connected: n.connected | 0, pools: n.pools || {},
+                   nftCount: Object.keys(NET.nft || {}).length,
+                   block: NET.block ? { height: NET.block.height | 0,
+                                         address: NET.block.blockAddress || '',
+                                         nonce: NET.block.nonce || '',
+                                         totalSats: NET.block.totalSats | 0 } : null } : null;
+    })(),
     at: Date.now()
   }, extra || {});
   const name = String(action || 'status').toLowerCase();
@@ -5744,6 +6668,27 @@ async function runGameAction(action, args) {
     if (opts.show === '0' || opts.show === 'false') gestureHideGuide();
     else gestureGuide(true);
     return snap({ guide: !gestureGuideEl || !gestureGuideEl.classList.contains('hidden') });
+  }
+
+  if (name === 'nexus') {
+    const sub = String(opts.subaction || 'status').toLowerCase();
+    if (sub === 'claim') claimNexus();
+    else if (sub === 'verify') verifyNexus();
+    else if (sub === 'transit') transitToShard(opts.shard);
+    else if (sub === 'nft-claim') nftClaim(opts.id);
+    else if (sub === 'nft-list') listNft(opts.id, opts.price);
+    else if (sub === 'nft-buy') buyNft(opts.id);
+    return snap();
+  }
+
+  if (name === 'coach') {
+    const sub = String(opts.subaction || 'show').toLowerCase();
+    if (sub === 'show') coachShow(1);
+    else if (sub === 'next') coachNext();
+    else if (sub === 'back') coachBack();
+    else if (sub === 'skip' || sub === 'hide') coachHide(true);
+    return snap({ coach: { open: coach.open, index: coach.index,
+                           total: coach.steps.length } });
   }
 
   if (name === 'walk') {
@@ -6356,6 +7301,30 @@ window.__nc = {
     },
     guide: (show) => { if (show) gestureGuide(true); else gestureHideGuide(); }
   },
+  nexus: {
+    status: () => ({ ...(nexusCurrent() || {}), ready: nexusReady(),
+                     claimed: nexusCurrent() ? (state.nexusHour | 0) === (nexusCurrent().hour | 0) : false,
+                     connected: (nexusCurrent() || {}).connected | 0,
+                     pools: (nexusCurrent() || {}).pools || {} }),
+    claim: claimNexus, verify: verifyNexus, transit: transitToShard,
+    shards: () => ({ ...((NET.nexus || {}).shards || {}) }),
+    nft: {
+      metadata: nftMetadata, claim: nftClaim, list: listNft, buy: buyNft,
+      state: () => ({ ...(NET.nft || {}) }),
+      seed: (id, owner, price) => {
+        const item = { id, owner, creator: owner, name: nftLabel(id),
+                       price: price | 0, at: Date.now(), standard: 'ERC-721',
+                       stakeSats: 100, wallet: nftWallet(id) };
+        NET.nft[id] = item; state.nft[id] = item; renderNexus();
+        return item;
+      }
+    }
+  },
+  coach: { show: () => coachShow(1), next: coachNext, back: coachBack,
+           skip: () => coachHide(true),
+           status: () => ({ open: coach.open, index: coach.index,
+                            total: coach.steps.length,
+                            title: coach.steps[coach.index] ? coach.steps[coach.index].title : '' }) },
   get orders() { return state.orders.map((o) => ({ ...o })); },
   get focusCounts() { return { ...state.focusCounts }; },
   intent(text) { return intentTool(text); },
