@@ -4683,7 +4683,9 @@ function setNetStatus(text) { if (netEl) netEl.textContent = text; }
 function mqttUrl() {
   const override = new URLSearchParams(location.search).get('mqtt');
   if (override) return override;
-  return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/mqtt';
+  // **Default MQTTv5 broker.** The fleet uses broker.emqx.io:8084 as the
+  // public MQTTv5 broker.
+  return 'wss://broker.emqx.io:8084/mqtt';
 }
 function mqttPublish(suffix, payload, qos, retain) {
   if (!NET.client || !NET.connected) return;
