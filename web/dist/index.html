@@ -4175,12 +4175,21 @@ function to5bit(bytes) {
 function nftWallet(id) {
   const parent = (NET.accounts.get(NET.pid) || {}).address || NET.pid || 'solo';
   const index = Math.max(1, TOKENS.findIndex((t) => t.id === id) + 1);
+  // **Request a real BIP84 testnet address from the CC.** The CC derives it
+  // from a BIP39 mnemonic and sends it back on nexus/nft/wallet. Until the
+  // response arrives, use a P-256 watch-only commitment as the fallback.
+  if (NET.connected) {
+    mqttPublish('nexus/nft/wallet', {
+      pid: parent, id, childIndex: index, at: Date.now()
+    }, 1, false);
+  }
   const seed = new TextEncoder().encode(`nft-child|${parent}|${id}|${index}`);
   const h = sha256Bytes(seed).slice(0, 20);
+  const address = bech32Encode('tb', [0].concat(to5bit(h)));
   return {
     kind: 'btc-child-wallet', network: 'testnet', parent,
-    childIndex: index, address: bech32Encode('tb', [0].concat(to5bit(h))),
-    stakeSats: 100, custody: 'vault-child'
+    childIndex: index, address: address,
+    stakeSats: 100, custody: 'vault-child-watch-only'
   };
 }
 function nftItem(id) { return NET.nft[id] || state.nft[id] || null; }
@@ -5082,6 +5091,24 @@ function handleTopicMessage(topic, bytes, retained) {
       }
     } else if (parts[5] === 'nft' && parts[6] === 'state') {
       applyNftState(data.nft || data.items || {});
+    } else if (parts[5] === 'nft' && parts[6] === 'wallet') {
+      // **BIP84 child wallet from the CC.** The CC derived a real testnet
+      // address from a BIP39 mnemonic; store it and show the mnemonic.
+      if (data && data.id && data.address) {
+        const item = NET.nft[data.id] || state.nft[data.id] || {};
+        item.wallet = item.wallet || {};
+        item.wallet.address = data.address;
+        item.wallet.mnemonic = data.mnemonic;
+        item.wallet.childIndex = data.childIndex | 0;
+        item.wallet.custody = 'vault-child-bip84';
+        NET.nft[data.id] = item;
+        state.nft[data.id] = item;
+        saveSoon();
+        if (data.mnemonic) {
+          window.prompt('BIP39 recovery phrase for ' + data.id + ' (save offline):', data.mnemonic);
+        }
+        renderNexus();
+      }
     } else if (parts[5] === 'nft' && parts[6] === 'trade') {
       const key = `${data.id}|${data.at}`;
       if (!state.nftSettled) state.nftSettled = [];
