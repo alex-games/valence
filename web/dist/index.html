@@ -320,7 +320,7 @@ body.touch #crosshair { opacity: 0.6; }
   display: none;
 }
 #minimap.show { display: block; }
-#minimap canvas { width: 140px; height: 140px; display: block; image-rendering: pixelated; border-radius: 4px; }
+#minimap canvas { width: 420px; height: 420px; display: block; image-rendering: pixelated; border-radius: 4px; }
 #minimap span { display: block; margin-top: 4px; font-size: 8px; letter-spacing: 0.1em; color: var(--muted); text-align: center; }
 
 #nexusHud {
@@ -797,7 +797,7 @@ button.btn:active { transform: translateY(1px); }
   .slot { width: 36px; height: 36px; }
   .slot canvas { width: 26px; height: 26px; inset: 3px; }
   #minimap { width: 118px; bottom: calc(72px + env(safe-area-inset-bottom)); }
-  #minimap canvas { width: 106px; height: 106px; }
+  #minimap canvas { width: 318px; height: 318px; }
   .card h1 { font-size: 17px; }
   .card { padding: 18px 16px 14px; }
   #hint { display: none; }
@@ -1193,7 +1193,7 @@ body.native .panel-dismiss { min-height: calc(44px * var(--ui-scale)); margin-to
   <div id="toast" role="status"></div>
   <div id="hint">Click to look around · WASD to move · 1–9 to pick a block</div>
 
-  <div id="minimap"><canvas id="mapcanvas" width="192" height="192"></canvas><span>TORRANCE · N ↑</span></div>
+  <div id="minimap"><canvas id="mapcanvas" width="576" height="576"></canvas><span>TORRANCE · N ↑</span></div>
   <button id="nexusHud" class="hidden" title="Walk to the Community Nexus at spawn and collect the hourly sat">COMMUNITY NEXUS · 1 SAT</button>
 
   <div id="chat">
@@ -2940,7 +2940,7 @@ function coachRectFor(kind) {
   if (kind === 'left') return { left: 0, top: innerHeight * 0.30, width: innerWidth * 0.44, height: innerHeight * 0.58 };
   if (kind === 'right') return { left: innerWidth * 0.44, top: innerHeight * 0.30, width: innerWidth * 0.56, height: innerHeight * 0.58 };
   if (kind === 'hotbar') return elRect('hotbar') || { left: innerWidth * 0.2, top: innerHeight * 0.86, width: innerWidth * 0.6, height: 80 * UI_SCALE };
-  if (kind === 'map') return elRect('minimap') || { left: 0, top: 0, width: 180 * UI_SCALE, height: 180 * UI_SCALE };
+  if (kind === 'map') return elRect('minimap') || { left: 0, top: 0, width: 540 * UI_SCALE, height: 540 * UI_SCALE };
   if (kind === 'top') return { left: innerWidth * 0.28, top: 0, width: innerWidth * 0.44, height: 110 * UI_SCALE };
   return { left: innerWidth * 0.25, top: innerHeight * 0.25, width: innerWidth * 0.5, height: innerHeight * 0.35 };
 }
@@ -5275,7 +5275,7 @@ function drawMap() {
   const g = mapCanvas.getContext('2d');
   // Keep the 192-unit map drawing and scale it to the retina backing store; the
   // line widths and labels keep their proportions.
-  const scale = mapCanvas.width / 192;
+  const scale = mapCanvas.width / 192;  // 3x at 576px
   g.setTransform(scale, 0, 0, scale, 0, 0);
   g.imageSmoothingEnabled = false;
   g.drawImage(mapBase, 0, 0, 192, 192);
@@ -5307,6 +5307,30 @@ function drawMap() {
     g.font = 'bold 6px system-ui';
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText((b.item || '?').slice(0, 1).toUpperCase(), bx, bz + 0.5);
+  }
+  // POIs / landmarks: emerald dots for tokens, blue dots for NPCs, teal for Nexus.
+  for (const t of (TOKENS || [])) {
+    const tx = (t.x / WX) * 192, tz = (t.z / WZ) * 192;
+    g.fillStyle = '#5be0c8';
+    g.beginPath(); g.arc(tx, tz, 3.6, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(0,0,0,.7)'; g.lineWidth = 1; g.stroke();
+  }
+  for (const n of (NPCS || [])) {
+    const nx = (n.x / WX) * 192, nz = (n.z / WZ) * 192;
+    g.fillStyle = '#7fc4ff';
+    g.beginPath(); g.arc(nx, nz, 2.8, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(0,0,0,.6)'; g.lineWidth = 1; g.stroke();
+  }
+  // Community Nexus node (teal, larger).
+  if (typeof NEXUS_NODE !== 'undefined' && NEXUS_NODE) {
+    const nx = (NEXUS_NODE.x / WX) * 192, nz = (NEXUS_NODE.z / WZ) * 192;
+    g.fillStyle = '#5be0c8';
+    g.beginPath(); g.arc(nx, nz, 4.5, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#0b1f22'; g.lineWidth = 1.5; g.stroke();
+    g.fillStyle = '#0b1f22';
+    g.font = 'bold 7px system-ui';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('N', nx, nz + 0.5);
   }
 }
 
