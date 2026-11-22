@@ -4686,7 +4686,7 @@ function mqttUrl() {
   if (override) return override;
   // **Default MQTTv5 broker.** The fleet uses broker.emqx.io:8084 as the
   // public MQTTv5 broker.
-  return 'wss://broker.emqx.io:8084/mqtt';
+  return 'wss://ai.alex2006hw.com:8883/mqtt';
 }
 function mqttPublish(suffix, payload, qos, retain) {
   if (!NET.client || !NET.connected) return;
